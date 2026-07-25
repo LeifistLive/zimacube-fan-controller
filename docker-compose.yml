@@ -20,8 +20,12 @@ services:
 
       NORMAL_PERCENT: "90"
       HIGH_PERCENT: "100"
+
       HIGH_TEMP: "47"
-      CHECK_INTERVAL: "30"
+      LOW_TEMP: "44"
+
+      CHECK_INTERVAL: "15"
+      I2C_RETRIES: "3"
 
     security_opt:
       - no-new-privileges:true
@@ -29,5 +33,14 @@ services:
     cap_drop:
       - ALL
 
-    cap_add:
-      - SYS_RAWIO
+    healthcheck:
+      test:
+        - CMD
+        - /usr/local/bin/healthcheck.sh
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+    tmpfs:
+      - /run/fan-controller:size=1m,nosuid,nodev,noexec

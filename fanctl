@@ -1,48 +1,46 @@
 #!/bin/sh
 set -eu
 
-OVERRIDE_FILE="/tmp/fan-override"
+RUNTIME_DIR="/run/fan-controller"
+COMMAND_FILE="${RUNTIME_DIR}/command"
+STATE_FILE="${RUNTIME_DIR}/state"
 
 usage() {
-    echo "Usage:"
-    echo "  fanctl 1-100   Set manual fan speed"
-    echo "  fanctl auto    Return to automatic control"
-    echo "  fanctl status  Show current state"
+    echo "Verwendung:"
+    echo "  fanctl 1-100   Manuelle Geschwindigkeit setzen"
+    echo "  fanctl auto    Automatik aktivieren"
+    echo "  fanctl status  Status anzeigen"
 }
 
-COMMAND="${1:-status}"
+command="${1:-status}"
 
-case "$COMMAND" in
-    auto)
-        rm -f "$OVERRIDE_FILE"
-        echo "Automatic fan control enabled."
-        ;;
-
+case "$command" in
     status)
-        if [ -f "$OVERRIDE_FILE" ]; then
-            echo "Mode: manual"
-            echo "Requested speed: $(cat "$OVERRIDE_FILE")%"
+        if [ -r "$STATE_FILE" ]; then
+            cat "$STATE_FILE"
         else
-            echo "Mode: automatic"
-        fi
-
-        if [ -f /tmp/fan-state ]; then
-            cat /tmp/fan-state
+            echo "Noch kein Status verfügbar."
+            exit 1
         fi
         ;;
 
-    *[!0-9]*|'')
+    auto)
+        printf 'auto\n' > "$COMMAND_FILE"
+        echo "Automatik angefordert."
+        ;;
+
+    ''|*[!0-9]*)
         usage
         exit 2
         ;;
 
     *)
-        if [ "$COMMAND" -lt 1 ] || [ "$COMMAND" -gt 100 ]; then
-            echo "Error: Percentage must be between 1 and 100." >&2
+        if [ "$command" -lt 1 ] || [ "$command" -gt 100 ]; then
+            echo "Prozentwert muss zwischen 1 und 100 liegen." >&2
             exit 2
         fi
 
-        printf '%s\n' "$COMMAND" > "$OVERRIDE_FILE"
-        echo "Manual fan speed requested: ${COMMAND}%"
+        printf '%s\n' "$command" > "$COMMAND_FILE"
+        echo "${command}% angefordert."
         ;;
 esac
