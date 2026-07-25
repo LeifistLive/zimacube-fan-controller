@@ -2,6 +2,8 @@ services:
   zimacube-fan-controller:
     build:
       context: .
+
+    image: zimacube-fan-controller:local
     container_name: zimacube-fan-controller
     restart: unless-stopped
 
@@ -11,20 +13,26 @@ services:
     volumes:
       - /var/local/emhttp/var.ini:/var/local/emhttp/var.ini:ro
       - /var/local/emhttp/disks.ini:/var/local/emhttp/disks.ini:ro
-      - fan-state:/var/lib/zimacube-fan-controller
+      - fan-data:/data
 
     environment:
+      TZ: "Europe/Berlin"
       I2C_BUS: "0"
       I2C_ADDRESS: "0x69"
+
       FAN_CURVE: "0:60,36:65,40:75,43:85,46:95,48:100"
       ARRAY_BOOST_PERCENT: "100"
       EMERGENCY_TEMP: "52"
       EMERGENCY_PERCENT: "100"
       HYSTERESIS_C: "2"
-      CHECK_INTERVAL: "15"
+
+      CHECK_INTERVAL_SECONDS: "15"
       I2C_RETRIES: "3"
-      API_ENABLED: "true"
-      API_PORT: "8080"
+      I2C_TIMEOUT_SECONDS: "5"
+
+      LISTEN_ADDRESS: ":8080"
+      # Set a long random token to protect write operations.
+      API_TOKEN: ""
 
     ports:
       - "192.168.178.123:8086:8080"
@@ -35,15 +43,22 @@ services:
     cap_drop:
       - ALL
 
+    read_only: true
+
+    tmpfs:
+      - /tmp:size=2m,nosuid,nodev,noexec
+
     healthcheck:
-      test: ["CMD", "/usr/local/bin/healthcheck.sh"]
+      test:
+        - CMD
+        - wget
+        - -q
+        - --spider
+        - http://127.0.0.1:8080/api/health
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 30s
 
-    tmpfs:
-      - /run/fan-controller:size=2m,nosuid,nodev,noexec
-
 volumes:
-  fan-state:
+  fan-data:

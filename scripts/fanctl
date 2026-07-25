@@ -1,0 +1,32 @@
+#!/bin/sh
+set -eu
+
+BASE_URL="${FANCTL_URL:-http://127.0.0.1:8080}"
+TOKEN="${API_TOKEN:-}"
+COMMAND="${1:-status}"
+
+headers=""
+[ -n "$TOKEN" ] && headers="--header=X-API-Token: $TOKEN"
+
+case "$COMMAND" in
+  status)
+    exec wget -qO- "$BASE_URL/api/status"
+    ;;
+  auto)
+    exec wget -qO- --method=POST $headers "$BASE_URL/api/mode/auto"
+    ;;
+  emergency)
+    exec wget -qO- --method=POST $headers "$BASE_URL/api/mode/emergency"
+    ;;
+  ''|*[!0-9]*)
+    echo "Usage: fanctl status|auto|emergency|1-100" >&2
+    exit 2
+    ;;
+  *)
+    [ "$COMMAND" -ge 1 ] && [ "$COMMAND" -le 100 ] || {
+      echo "Percent must be between 1 and 100" >&2
+      exit 2
+    }
+    exec wget -qO- --method=POST $headers "$BASE_URL/api/fan/$COMMAND"
+    ;;
+esac

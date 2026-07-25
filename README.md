@@ -1,28 +1,43 @@
 # ZimaCube Fan Controller
 
-Docker-based fan controller for the ZimaCube backplane controller on I²C bus `0`, address `0x69`.
+A small Go service for controlling the ZimaCube backplane fan controller over I²C.
 
 ## Features
 
 - Temperature-based fan curve
 - Automatic boost during parity check, parity sync, rebuild and clear
-- Emergency temperature mode
+- Emergency temperature protection
 - Hysteresis
 - Persistent manual override
-- `fanctl` commands
-- JSON status and health API
+- REST API
+- Built-in web interface
 - Docker healthcheck
-- I²C retries and locking
-- No privileged container
-- GitHub Actions for ShellCheck and Docker build
+- I²C retries and timeouts
+- Read-only container filesystem
+- No privileged mode
+- Optional API token for write operations
+- GitHub Actions for tests, Docker build and GHCR publishing
+- No Prometheus integration
 
 ## Unraid requirement
 
-Add before `emhttp` in `/boot/config/go`:
+Add these lines to `/boot/config/go` before `emhttp`:
 
 ```bash
 modprobe i2c-dev
 modprobe i2c-i801
+```
+
+## Portainer
+
+Use the repository as a Git stack and build locally from `docker-compose.yml`.
+
+Do not enable image pulling for the local image `zimacube-fan-controller:local`.
+
+## Web interface
+
+```text
+http://192.168.178.123:8086/
 ```
 
 ## Commands
@@ -37,14 +52,24 @@ docker exec zimacube-fan-controller fanctl emergency
 ## API
 
 ```text
-http://192.168.178.123:8086/status
-http://192.168.178.123:8086/health
+GET  /api/status
+GET  /api/health
+POST /api/fan/{1-100}
+POST /api/mode/auto
+POST /api/mode/emergency
 ```
 
-Disable with `API_ENABLED=false` and remove `ports:`.
+When `API_TOKEN` is set, POST requests require:
 
-## Fan curve
-
-```yaml
-FAN_CURVE: "0:60,36:65,40:75,43:85,46:95,48:100"
+```text
+X-API-Token: your-token
 ```
+
+## Safety priority
+
+1. Emergency temperature
+2. Array-operation minimum boost
+3. Manual mode
+4. Temperature curve
+
+A manual low speed therefore cannot suppress emergency protection or the configured array boost.
