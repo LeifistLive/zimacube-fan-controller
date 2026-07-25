@@ -2,10 +2,8 @@ services:
   zimacube-fan-controller:
     build:
       context: .
-
     container_name: zimacube-fan-controller
     restart: unless-stopped
-    network_mode: none
 
     devices:
       - /dev/i2c-0:/dev/i2c-0:rwm
@@ -13,19 +11,23 @@ services:
     volumes:
       - /var/local/emhttp/var.ini:/var/local/emhttp/var.ini:ro
       - /var/local/emhttp/disks.ini:/var/local/emhttp/disks.ini:ro
+      - fan-state:/var/lib/zimacube-fan-controller
 
     environment:
       I2C_BUS: "0"
       I2C_ADDRESS: "0x69"
-
-      NORMAL_PERCENT: "90"
-      HIGH_PERCENT: "100"
-
-      HIGH_TEMP: "47"
-      LOW_TEMP: "44"
-
+      FAN_CURVE: "0:60,36:65,40:75,43:85,46:95,48:100"
+      ARRAY_BOOST_PERCENT: "100"
+      EMERGENCY_TEMP: "52"
+      EMERGENCY_PERCENT: "100"
+      HYSTERESIS_C: "2"
       CHECK_INTERVAL: "15"
       I2C_RETRIES: "3"
+      API_ENABLED: "true"
+      API_PORT: "8080"
+
+    ports:
+      - "192.168.178.123:8086:8080"
 
     security_opt:
       - no-new-privileges:true
@@ -34,13 +36,14 @@ services:
       - ALL
 
     healthcheck:
-      test:
-        - CMD
-        - /usr/local/bin/healthcheck.sh
+      test: ["CMD", "/usr/local/bin/healthcheck.sh"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 30s
 
     tmpfs:
-      - /run/fan-controller:size=1m,nosuid,nodev,noexec
+      - /run/fan-controller:size=2m,nosuid,nodev,noexec
+
+volumes:
+  fan-state:
