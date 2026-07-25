@@ -1,11 +1,12 @@
 services:
   zimacube-fan-controller:
-    build: .
+    build:
+      context: .
 
+    image: zimacube-fan-controller:latest
     container_name: zimacube-fan-controller
 
     restart: unless-stopped
-
     network_mode: none
 
     devices:

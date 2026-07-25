@@ -6,27 +6,27 @@ ADDRESS="${I2C_ADDRESS:-0x69}"
 FAN_PERCENT="${FAN_PERCENT:-90}"
 
 if [ "$FAN_PERCENT" -lt 1 ] || [ "$FAN_PERCENT" -gt 100 ]; then
-    echo "FAN_PERCENT must be between 1 and 100"
+    echo "[ERROR] FAN_PERCENT must be between 1 and 100"
     exit 1
 fi
 
 FAN_HEX=$(printf "0x%02x" "$FAN_PERCENT")
 
-echo "Waiting for /dev/i2c-${BUS}..."
+echo "[INFO] Waiting for /dev/i2c-${BUS}..."
 
 for i in $(seq 1 30); do
     if [ -e "/dev/i2c-${BUS}" ]; then
-        echo "Setting fan speed to ${FAN_PERCENT}% (${FAN_HEX})"
+        echo "[INFO] Setting fan speed to ${FAN_PERCENT}%"
 
         i2cset -f -y "$BUS" "$ADDRESS" 0x04 \
             0x01 "$FAN_HEX" 0x00 0x00 0x00 0x00 0x01 0x00 i
 
-        echo "Done."
-        exec sleep infinity
+        echo "[INFO] Fan speed successfully applied."
+        break
     fi
 
     sleep 2
 done
 
-echo "I2C device not found."
-exit 1
+echo "[INFO] Container is running."
+exec tail -f /dev/null
