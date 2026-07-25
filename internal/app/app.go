@@ -516,6 +516,8 @@ func (a *App) evaluate(ctx context.Context) {
 		Version:                Version,
 		Mode:                   result.Mode,
 		ActiveProfile:          activeProfile,
+		I2CBus:                 a.cfg.I2CBus,
+		I2CAddress:             a.cfg.I2CAddress,
 		FanPercent:             result.Percent,
 		MaximumDiskTemperature: reading.Temperature,
 		TemperatureValid:       reading.Valid,

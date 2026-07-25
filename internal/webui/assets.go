@@ -1,7 +1,8 @@
 package webui
 
 // IndexHTML, StyleCSS and ScriptJS are served from separate routes so that the
-// Content-Security-Policy no longer needs 'unsafe-inline'.
+// Content-Security-Policy no longer needs 'unsafe-inline'. All icons are
+// hand-drawn inline SVG (no icon font, no CDN) to stay inside default-src 'self'.
 const IndexHTML = `<!doctype html>
 <html lang="de">
 <head>
@@ -11,78 +12,200 @@ const IndexHTML = `<!doctype html>
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
-<header class="topbar">
+<div class="shell">
+
+<aside class="sidebar">
 <div class="brand">
-<h1>ZimaCube <span class="brand-accent">Fan Controller</span></h1>
-<div class="sub">Live-Status &middot; Profile &middot; Verlauf <span id="version" class="muted"></span></div>
+<span class="brand-icon-box">
+<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="6.5"/><path d="M10 10L10 4.2M10 10L14.7 12.8M10 10L5.3 12.8"/><circle cx="10" cy="10" r="1.3" fill="currentColor" stroke="none"/></svg>
+</span>
+<div>
+<div class="brand-name">ZimaCube</div>
+<div class="brand-sub">Fan Controller</div>
 </div>
-<div class="controls-row">
+</div>
+
+<nav class="side-nav">
+<div class="side-nav-label">Ansicht</div>
+<a href="#overview" class="side-link active" data-section="overview">
+<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 10h3.2l1.8-5 3 10 2-8 1.5 3H18"/></svg>
+Status
+</a>
+<a href="#control" class="side-link" data-section="control">
+<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="17" y2="6"/><circle cx="12" cy="6" r="1.6" fill="currentColor" stroke="none"/><line x1="3" y1="10" x2="17" y2="10"/><circle cx="7" cy="10" r="1.6" fill="currentColor" stroke="none"/><line x1="3" y1="14" x2="17" y2="14"/><circle cx="14" cy="14" r="1.6" fill="currentColor" stroke="none"/></svg>
+Steuerung
+</a>
+<a href="#history" class="side-link" data-section="history">
+<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="16" x2="4" y2="11"/><line x1="10" y1="16" x2="10" y2="6"/><line x1="16" y1="16" x2="16" y2="13"/></svg>
+Verlauf
+</a>
+<a href="#events-section" class="side-link" data-section="events-section">
+<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="3.5" cy="6" r="0.9" fill="currentColor" stroke="none"/><line x1="7" y1="6" x2="17" y2="6"/><circle cx="3.5" cy="10" r="0.9" fill="currentColor" stroke="none"/><line x1="7" y1="10" x2="17" y2="10"/><circle cx="3.5" cy="14" r="0.9" fill="currentColor" stroke="none"/><line x1="7" y1="14" x2="17" y2="14"/></svg>
+Ereignisse
+</a>
+<a href="#config-section" class="side-link" data-section="config-section">
+<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3C5.5 3 5 3.8 5 5v2.5c0 1-.4 1.5-1.5 1.5 1.1 0 1.5.5 1.5 1.5V13c0 1.2.5 2 2 2"/><path d="M13 3c1.5 0 2 .8 2 2v2.5c0 1 .4 1.5 1.5 1.5-1.1 0-1.5.5-1.5 1.5V13c0 1.2-.5 2-2 2"/></svg>
+Konfiguration
+</a>
+</nav>
+
+<div class="sidebar-footer">
+<span class="dot" id="sidebarDot"></span>
+<div>
+<div class="sidebar-footer-title">Controller</div>
+<div class="sidebar-footer-sub" id="sidebarStatus">–</div>
+</div>
+</div>
+</aside>
+
+<div class="content">
+
+<header class="page-head">
+<div>
+<h1>Dashboard</h1>
+<div class="sub">Live-Überwachung deiner HDD-Lüftersteuerung <span id="version" class="version-badge"></span></div>
+</div>
+<div class="head-actions">
 <input id="token" class="input token-input" type="password" placeholder="API-Token" autocomplete="off">
-<button id="refresh" class="btn" type="button">Aktualisieren</button>
+<button type="button" class="pill-btn" data-post="/api/mode/auto">
+<svg viewBox="0 0 20 20" fill="currentColor" stroke="none"><path d="M6 4.5v11l9-5.5z"/></svg>
+Automatik
+</button>
+<button type="button" class="pill-btn pill-danger" data-post="/api/mode/emergency">
+<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3 18 17H2Z"/><line x1="10" y1="8" x2="10" y2="12"/><circle cx="10" cy="14.3" r="0.9" fill="currentColor" stroke="none"/></svg>
+Notfall
+</button>
+<button id="refresh" type="button" class="pill-btn pill-primary">
+<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.9 10A6.1 6.1 0 0 1 16 6.9"/><path d="M16.1 10A6.1 6.1 0 0 1 4 13.1"/><path d="M16 4v3.3h-3.3"/><path d="M4 16v-3.3h3.3"/></svg>
+Aktualisieren
+</button>
 </div>
 </header>
 
 <div id="banner" class="banner" hidden></div>
 
-<main>
+<section id="overview" class="section">
+<h2 class="section-title">System Overview</h2>
 
-<section class="stat-grid">
-<div class="stat-card"><div class="stat-label">Modus</div><div class="stat-value" id="mode">-</div></div>
-<div class="stat-card"><div class="stat-label">Profil</div><div class="stat-value" id="profile">-</div></div>
-<div class="stat-card">
-<div class="stat-label">Lüfter</div>
-<div class="stat-value" id="fan">-</div>
+<div class="hero-grid">
+<div class="hero-card">
+<div class="hero-head">
+<span class="icon-box"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="6.5"/><path d="M10 10L10 4.2M10 10L14.7 12.8M10 10L5.3 12.8"/><circle cx="10" cy="10" r="1.3" fill="currentColor" stroke="none"/></svg></span>
+<div><div class="hero-title">Lüfter</div><div class="hero-sub">Geschriebener Prozentwert</div></div>
+</div>
+<div class="hero-value" id="fan">-</div>
 <div class="meter"><div class="meter-fill" id="fanMeter"></div></div>
+<div class="hero-meta"><span id="fanMetaLeft">-</span><span id="fanMetaRight" class="muted"></span></div>
 </div>
-<div class="stat-card"><div class="stat-label">Max. HDD</div><div class="stat-value" id="temp">-</div></div>
-<div class="stat-card"><div class="stat-label">Array</div><div class="stat-value" id="array">-</div></div>
-<div class="stat-card">
-<div class="stat-label">Controller</div>
-<div class="stat-value"><span class="dot" id="controllerDot"></span><span id="controller">-</span></div>
-</div>
-</section>
 
-<section class="panel">
+<div class="hero-card">
+<div class="hero-head">
+<span class="icon-box"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 11.2V4.5a1.5 1.5 0 0 0-3 0v6.7a3 3 0 1 0 3 0Z"/><circle cx="10" cy="14" r="1" fill="currentColor" stroke="none"/></svg></span>
+<div><div class="hero-title">Temperatur</div><div class="hero-sub">Maximale HDD-Temperatur</div></div>
+</div>
+<div class="hero-value" id="temp">-</div>
+<div class="meter"><div class="meter-fill" id="tempMeter"></div></div>
+<div class="hero-meta"><span id="tempMetaLeft">-</span><span id="tempMetaRight" class="muted"></span></div>
+</div>
+
+<div class="hero-card">
+<div class="hero-head">
+<span class="icon-box"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.5 16 4.8V9.5C16 13.8 13.4 17 10 18 6.6 17 4 13.8 4 9.5V4.8Z"/></svg></span>
+<div><div class="hero-title">Sicherheitsmarge</div><div class="hero-sub">Abstand zur Notfalltemperatur</div></div>
+</div>
+<div class="hero-value" id="margin">-</div>
+<div class="meter"><div class="meter-fill" id="marginMeter"></div></div>
+<div class="hero-meta"><span id="marginMetaLeft">-</span><span id="marginMetaRight" class="muted"></span></div>
+</div>
+</div>
+
+<div class="info-bar">
+<span class="icon-box icon-box-lg">
+<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="8" height="8" rx="1.5"/><path d="M8 6V3M12 6V3M8 17v-3M12 17v-3M6 8H3M6 12H3M17 8h-3M17 12h-3"/></svg>
+</span>
+<div class="info-main">
+<div class="info-title">I²C Controller <span class="badge" id="modeBadge">-</span><span class="badge badge-neutral" id="profileBadge">-</span><span class="version-badge" id="infoVersion"></span></div>
+<div class="info-meta" id="infoMeta"></div>
+</div>
+<div class="info-status-wrap"><span class="dot" id="controllerDot"></span><span id="controller" class="info-status">-</span></div>
+</div>
+
+<div class="panel reason-panel">
 <div class="panel-head"><h2>Grund</h2></div>
 <div id="reason" class="reason">-</div>
+</div>
 </section>
 
-<section class="panel">
-<div class="panel-head"><h2>Steuerung</h2></div>
-<div class="controls-row">
-<div class="segmented" id="profiles"></div>
+<section id="control" class="section">
+<h2 class="section-title">Steuerung</h2>
+<div class="resource-grid">
+
+<div class="panel">
+<div class="panel-head panel-head-row">
+<div class="panel-head-title">
+<span class="icon-box"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3 17 7 10 11 3 7Z"/><path d="M3 11l7 4 7-4"/><path d="M3 15l7 4 7-4"/></svg></span>
+<div><h2>Profile</h2><div class="muted small">Aktives Lüfterprofil wechseln</div></div>
+</div>
+</div>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Profil</th><th>Boost</th><th>Notfall</th><th>Status</th></tr></thead>
+<tbody id="profileTable"></tbody>
+</table>
+</div>
+</div>
+
+<div class="panel">
+<div class="panel-head">
+<div class="panel-head-title">
+<span class="icon-box"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="17" y2="6"/><circle cx="12" cy="6" r="1.6" fill="currentColor" stroke="none"/><line x1="3" y1="10" x2="17" y2="10"/><circle cx="7" cy="10" r="1.6" fill="currentColor" stroke="none"/><line x1="3" y1="14" x2="17" y2="14"/><circle cx="14" cy="14" r="1.6" fill="currentColor" stroke="none"/></svg></span>
+<div><h2>Manuell &amp; Test</h2><div class="muted small">Direkte Drehzahlvorgabe</div></div>
+</div>
 </div>
 <div class="controls-row">
-<button type="button" class="btn" data-post="/api/mode/auto">Automatik</button>
-<button type="button" class="btn btn-danger" data-post="/api/mode/emergency">Notfall</button>
-<span class="spacer"></span>
 <input id="percent" class="input num-input" type="number" min="1" max="100" value="75">
-<button id="setManual" class="btn btn-primary" type="button">Manuell setzen</button>
+<button id="setManual" class="pill-btn pill-primary" type="button">Setzen</button>
 </div>
 <div class="controls-row">
 <span class="muted small">Test</span>
-<button type="button" class="btn btn-ghost" data-test="25">25 %</button>
-<button type="button" class="btn btn-ghost" data-test="50">50 %</button>
-<button type="button" class="btn btn-ghost" data-test="75">75 %</button>
-<button type="button" class="btn btn-ghost" data-test="100">100 %</button>
+<button type="button" class="pill-btn pill-ghost" data-test="25">25 %</button>
+<button type="button" class="pill-btn pill-ghost" data-test="50">50 %</button>
+<button type="button" class="pill-btn pill-ghost" data-test="75">75 %</button>
+<button type="button" class="pill-btn pill-ghost" data-test="100">100 %</button>
 </div>
 <pre id="message" class="message"></pre>
+</div>
+
+</div>
 </section>
 
-<section class="chart-grid">
+<section id="history" class="section">
+<h2 class="section-title">Verlauf</h2>
+<div class="chart-grid">
 <div class="panel">
-<div class="panel-head"><h2>Temperatur</h2><div class="muted small">Maximale HDD-Temperatur</div></div>
+<div class="panel-head"><div class="panel-head-title">
+<span class="icon-box"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="16" x2="4" y2="11"/><line x1="10" y1="16" x2="10" y2="6"/><line x1="16" y1="16" x2="16" y2="13"/></svg></span>
+<div><h2>Temperatur</h2><div class="muted small">Maximale HDD-Temperatur</div></div>
+</div></div>
 <canvas id="chartTemp" height="220"></canvas>
 </div>
 <div class="panel">
-<div class="panel-head"><h2>Lüfterdrehzahl</h2><div class="muted small">Geschriebener Prozentwert</div></div>
+<div class="panel-head"><div class="panel-head-title">
+<span class="icon-box"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="16" x2="4" y2="11"/><line x1="10" y1="16" x2="10" y2="6"/><line x1="16" y1="16" x2="16" y2="13"/></svg></span>
+<div><h2>Lüfterdrehzahl</h2><div class="muted small">Geschriebener Prozentwert</div></div>
+</div></div>
 <canvas id="chartFan" height="220"></canvas>
+</div>
 </div>
 </section>
 
-<section class="panel">
+<section id="events-section" class="section">
+<div class="panel">
 <div class="panel-head panel-head-row">
-<h2>Ereignisse</h2>
+<div class="panel-head-title">
+<span class="icon-box"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="3.5" cy="6" r="0.9" fill="currentColor" stroke="none"/><line x1="7" y1="6" x2="17" y2="6"/><circle cx="3.5" cy="10" r="0.9" fill="currentColor" stroke="none"/><line x1="7" y1="10" x2="17" y2="10"/><circle cx="3.5" cy="14" r="0.9" fill="currentColor" stroke="none"/><line x1="7" y1="14" x2="17" y2="14"/></svg></span>
+<div><h2>Ereignisse</h2><div class="muted small">Verlauf von Modus- und Lüfteränderungen</div></div>
+</div>
 <input id="eventFilter" class="input filter-input" type="text" placeholder="Filter...">
 </div>
 <div class="table-wrap">
@@ -91,18 +214,26 @@ const IndexHTML = `<!doctype html>
 <tbody id="events"></tbody>
 </table>
 </div>
-</section>
-
-<section class="panel">
-<div class="panel-head"><h2>Konfiguration</h2></div>
-<textarea id="config" class="input config-editor" spellcheck="false"></textarea>
-<div class="controls-row mt">
-<button id="saveConfig" class="btn btn-primary" type="button">Speichern</button>
-<button id="reloadConfig" class="btn" type="button">Verwerfen und neu laden</button>
+<div class="table-footer muted small" id="eventsFooter"></div>
 </div>
 </section>
 
-</main>
+<section id="config-section" class="section">
+<div class="panel">
+<div class="panel-head"><div class="panel-head-title">
+<span class="icon-box"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3C5.5 3 5 3.8 5 5v2.5c0 1-.4 1.5-1.5 1.5 1.1 0 1.5.5 1.5 1.5V13c0 1.2.5 2 2 2"/><path d="M13 3c1.5 0 2 .8 2 2v2.5c0 1 .4 1.5 1.5 1.5-1.1 0-1.5.5-1.5 1.5V13c0 1.2-.5 2-2 2"/></svg></span>
+<div><h2>Konfiguration</h2><div class="muted small">Profile als JSON bearbeiten</div></div>
+</div></div>
+<textarea id="config" class="input config-editor" spellcheck="false"></textarea>
+<div class="controls-row mt">
+<button id="saveConfig" class="pill-btn pill-primary" type="button">Speichern</button>
+<button id="reloadConfig" class="pill-btn" type="button">Verwerfen und neu laden</button>
+</div>
+</div>
+</section>
+
+</div>
+</div>
 
 <script src="/app.js"></script>
 </body>
@@ -110,106 +241,175 @@ const IndexHTML = `<!doctype html>
 
 const StyleCSS = `:root{
 color-scheme:dark;
---bg:#09090b;
---card:#121215;
---border:#1f1f24;
---border-soft:#2a2a31;
---text:#f4f4f5;
---text-muted:#a1a1aa;
---text-dim:#71717a;
+--bg:#0a0a10;
+--sidebar-bg:#0c0c13;
+--card:#121218;
+--card-2:#17171f;
+--border:#1e1e27;
+--border-soft:#2a2a35;
+--text:#f4f4f6;
+--text-muted:#9d9dae;
+--text-dim:#6d6d80;
+--purple:#8b5cf6;
+--purple-dark:#6d28d9;
+--purple-soft:rgba(139,92,246,.14);
+--blue:#3b82f6;
 --green:#22c55e;
 --yellow:#eab308;
 --red:#ef4444;
---blue:#3b82f6;
---orange:#f59e0b;
---radius-card:14px;
---radius-control:8px;
+--radius-card:16px;
+--radius-control:10px;
 }
 *{box-sizing:border-box}
-html,body{background:var(--bg)}
+html{scroll-behavior:smooth;background:var(--bg)}
 body{
-margin:0;color:var(--text);
+margin:0;color:var(--text);background:var(--bg);
 font-family:Inter,-apple-system,"Segoe UI",system-ui,sans-serif;
 font-size:14px;line-height:1.45;
 -webkit-font-smoothing:antialiased;
 }
 h1,h2{margin:0;font-weight:650;letter-spacing:-.01em}
-h1{font-size:1.3rem}
-.brand-accent{color:var(--text-muted);font-weight:500}
+h1{font-size:1.7rem}
 h2{font-size:.95rem}
 .muted{color:var(--text-muted)}
 .small{font-size:.78rem}
+svg{display:block}
 
-.topbar{
-display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;
-padding:18px 28px;border-bottom:1px solid var(--border);
-position:sticky;top:0;background:rgba(9,9,11,.92);backdrop-filter:blur(6px);z-index:10;
+.shell{display:flex;align-items:flex-start;min-height:100vh}
+
+.sidebar{
+width:250px;flex:0 0 250px;background:var(--sidebar-bg);border-right:1px solid var(--border);
+display:flex;flex-direction:column;padding:22px 16px;position:sticky;top:0;height:100vh;overflow-y:auto;
 }
-.sub{color:var(--text-muted);font-size:.8rem;margin-top:4px}
-
-main{max-width:1360px;margin:0 auto;padding:22px 28px 60px;display:flex;flex-direction:column;gap:20px}
-
-.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
-.stat-card{
-background:var(--card);border:1px solid var(--border);border-radius:var(--radius-card);
-padding:16px 18px;
+.brand{display:flex;align-items:center;gap:12px;padding:4px 8px 24px}
+.brand-icon-box{
+width:42px;height:42px;border-radius:11px;flex:0 0 auto;
+background:linear-gradient(135deg,var(--purple),var(--purple-dark));
+display:flex;align-items:center;justify-content:center;color:#fff;
 }
-.stat-label{color:var(--text-muted);font-size:.78rem;text-transform:uppercase;letter-spacing:.04em}
-.stat-value{font-size:1.5rem;font-weight:650;margin-top:6px;letter-spacing:-.01em}
-.stat-value.ok{color:var(--green)}
-.stat-value.warn{color:var(--yellow)}
-.stat-value.bad{color:var(--red)}
+.brand-icon-box svg{width:22px;height:22px}
+.brand-name{font-weight:700;font-size:1rem;letter-spacing:-.01em}
+.brand-sub{font-size:.72rem;color:var(--text-muted)}
+
+.side-nav{display:flex;flex-direction:column;gap:2px;margin-top:4px}
+.side-nav-label{font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dim);padding:10px 10px 6px;font-weight:650}
+.side-link{
+display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;
+color:var(--text-muted);text-decoration:none;font-size:.86rem;font-weight:550;
+border-left:2px solid transparent;
+}
+.side-link svg{width:16px;height:16px;flex:0 0 auto}
+.side-link:hover{background:#15151d;color:var(--text)}
+.side-link.active{background:var(--purple-soft);color:#fff;border-left-color:var(--purple)}
+
+.sidebar-footer{margin-top:auto;display:flex;align-items:center;gap:10px;padding:14px 10px 4px;border-top:1px solid var(--border)}
+.sidebar-footer-title{font-size:.8rem;font-weight:650}
+.sidebar-footer-sub{font-size:.72rem;color:var(--text-muted)}
+
+.content{flex:1;min-width:0;padding:26px 32px 60px;display:flex;flex-direction:column;gap:26px}
+
+.page-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap}
+.sub{color:var(--text-muted);font-size:.82rem;margin-top:6px}
+.head-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+.version-badge{
+display:inline-block;padding:2px 8px;border-radius:6px;background:var(--card-2);
+border:1px solid var(--border-soft);color:var(--text-muted);font-size:.72rem;font-weight:650;
+margin-left:4px;vertical-align:middle;
+}
+
+.pill-btn{
+display:inline-flex;align-items:center;gap:7px;padding:9px 15px;border-radius:var(--radius-control);
+border:1px solid var(--border-soft);background:var(--card-2);color:var(--text);
+font:inherit;font-weight:650;font-size:.85rem;cursor:pointer;
+}
+.pill-btn svg{width:14px;height:14px}
+.pill-btn:hover{background:#1c1c26;border-color:var(--text-dim)}
+.pill-primary{background:var(--purple);border-color:var(--purple);color:#fff}
+.pill-primary:hover{background:#7c4de0;border-color:#7c4de0}
+.pill-danger{color:#fca5a5;border-color:rgba(239,68,68,.35)}
+.pill-danger:hover{background:rgba(239,68,68,.12);border-color:var(--red)}
+.pill-ghost{background:transparent}
+.table-action{padding:6px 12px;font-size:.78rem}
+
+.input{
+border-radius:var(--radius-control);border:1px solid var(--border-soft);background:#0d0d13;
+color:var(--text);padding:9px 12px;font:inherit;
+}
+.input:focus{outline:2px solid var(--purple);outline-offset:-1px}
+.token-input{min-width:170px}
+.num-input{width:90px}
+.filter-input{width:200px}
+
+.banner{
+margin:0;padding:12px 16px;border-radius:12px;
+border:1px solid rgba(239,68,68,.35);background:rgba(239,68,68,.1);color:#fca5a5;
+}
+
+.section{display:flex;flex-direction:column;gap:14px;scroll-margin-top:20px}
+.section-title{font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dim);font-weight:650}
+
+.hero-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+.hero-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-card);padding:18px 20px}
+.hero-head{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.hero-title{font-weight:650;font-size:.92rem}
+.hero-sub{font-size:.74rem;color:var(--text-muted);margin-top:1px}
+.hero-value{font-size:2rem;font-weight:700;letter-spacing:-.02em}
+.hero-meta{display:flex;justify-content:space-between;margin-top:9px;font-size:.78rem;color:var(--text-muted)}
+
+.icon-box{
+width:38px;height:38px;border-radius:10px;flex:0 0 auto;
+background:linear-gradient(135deg,var(--purple),var(--purple-dark));
+display:flex;align-items:center;justify-content:center;color:#fff;
+}
+.icon-box svg{width:19px;height:19px}
+.icon-box-lg{width:46px;height:46px;border-radius:12px}
+.icon-box-lg svg{width:24px;height:24px}
+
+.meter{margin-top:10px;height:7px;border-radius:999px;background:var(--border);overflow:hidden}
+.meter-fill{height:100%;width:0;border-radius:999px;background:var(--blue);transition:width .3s ease}
+.meter-fill.ok{background:var(--green)}
+.meter-fill.warn{background:var(--yellow)}
+.meter-fill.bad{background:var(--red)}
+
+.info-bar{
+display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+background:var(--card);border:1px solid var(--border);border-radius:var(--radius-card);padding:14px 18px;
+}
+.info-main{flex:1;min-width:220px}
+.info-title{font-weight:650;font-size:.92rem;display:flex;align-items:center;flex-wrap:wrap;gap:2px}
+.info-meta{display:flex;flex-wrap:wrap;margin-top:6px;font-size:.78rem;color:var(--text-muted)}
+.info-meta span{padding-right:12px;margin-right:12px;border-right:1px solid var(--border)}
+.info-meta span:last-child{border-right:none;padding-right:0;margin-right:0}
+.info-status-wrap{display:flex;align-items:center}
+.info-status{font-weight:650;font-size:.85rem}
+
+.badge{
+display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;
+font-size:.72rem;font-weight:650;margin-left:8px;
+}
+.badge-green{background:rgba(34,197,94,.14);color:#4ade80}
+.badge-yellow{background:rgba(234,179,8,.14);color:#facc15}
+.badge-red{background:rgba(239,68,68,.14);color:#f87171}
+.badge-neutral{background:var(--card-2);color:var(--text-muted)}
 
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;vertical-align:middle;background:var(--text-dim)}
 .dot-ok{background:var(--green);box-shadow:0 0 0 3px rgba(34,197,94,.16)}
 .dot-bad{background:var(--red);box-shadow:0 0 0 3px rgba(239,68,68,.16)}
 
-.meter{margin-top:10px;height:6px;border-radius:999px;background:var(--border);overflow:hidden}
-.meter-fill{height:100%;width:0;border-radius:999px;background:var(--blue);transition:width .3s ease}
-
 .panel{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-card);padding:18px 20px}
+.reason-panel{padding:16px 20px}
 .panel-head{margin-bottom:12px}
 .panel-head-row{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.panel-head-title{display:flex;align-items:center;gap:12px}
 .reason{color:var(--text-muted)}
-
-.banner{
-margin:0 28px;padding:12px 16px;border-radius:10px;
-border:1px solid rgba(239,68,68,.35);background:rgba(239,68,68,.1);color:#fca5a5;
-}
 
 .controls-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px}
 .controls-row:first-child{margin-top:0}
 .controls-row.mt{margin-top:14px}
-.spacer{flex:1 1 auto}
 
-.segmented{display:flex;gap:6px;flex-wrap:wrap}
-.seg-btn{
-border-radius:var(--radius-control);border:1px solid var(--border-soft);background:transparent;
-color:var(--text-muted);padding:8px 14px;cursor:pointer;font-size:.85rem;font-weight:550;
-}
-.seg-btn:hover{border-color:var(--text-dim);color:var(--text)}
-.seg-btn.active{background:var(--text);color:#09090b;border-color:var(--text)}
-
-.input{
-border-radius:var(--radius-control);border:1px solid var(--border-soft);background:#0d0d10;
-color:var(--text);padding:9px 12px;font:inherit;
-}
-.input:focus{outline:2px solid var(--blue);outline-offset:-1px}
-.token-input{min-width:190px}
-.num-input{width:90px}
-.filter-input{width:200px}
-
-.btn{
-border-radius:var(--radius-control);border:1px solid var(--border-soft);background:#141417;
-color:var(--text);padding:9px 14px;font:inherit;font-weight:550;cursor:pointer;
-}
-.btn:hover{background:#1b1b20;border-color:var(--text-dim)}
-.btn-primary{background:var(--text);color:#09090b;border-color:var(--text)}
-.btn-primary:hover{background:#d4d4d8;border-color:#d4d4d8}
-.btn-danger{color:#fca5a5;border-color:rgba(239,68,68,.35)}
-.btn-danger:hover{background:rgba(239,68,68,.12);border-color:var(--red)}
-.btn-ghost{background:transparent;color:var(--text-muted)}
-.btn-ghost:hover{background:#16161a;color:var(--text)}
+.resource-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:16px}
+@media (max-width:1000px){.resource-grid{grid-template-columns:1fr}}
 
 .message{white-space:pre-wrap;overflow:auto;color:var(--text-muted);margin:12px 0 0;font-size:.85rem}
 
@@ -220,19 +420,28 @@ canvas{width:100%;display:block}
 .table-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:.85rem}
 th{
-text-align:left;color:var(--text-muted);font-weight:600;font-size:.78rem;
+text-align:left;color:var(--text-muted);font-weight:600;font-size:.76rem;
 text-transform:uppercase;letter-spacing:.03em;padding:0 10px 10px;border-bottom:1px solid var(--border);
 }
 td{padding:10px;border-bottom:1px solid var(--border);color:var(--text)}
-tbody tr:hover{background:#151519}
+tbody tr:hover{background:#16161e}
 tbody tr:last-child td{border-bottom:none}
+.table-footer{padding:10px 2px 0}
 
 .config-editor{width:100%;min-height:220px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.82rem;resize:vertical}
 
-@media (max-width:640px){
-.topbar{padding:14px 16px}
-main{padding:16px 16px 40px}
-.banner{margin:0 16px}
+@media (max-width:900px){
+.shell{flex-direction:column}
+.sidebar{
+width:100%;flex:0 0 auto;height:auto;position:relative;
+flex-direction:row;align-items:center;gap:18px;padding:14px 16px;overflow-x:auto;
+}
+.brand{padding:0}
+.side-nav{flex-direction:row;margin-top:0}
+.side-nav-label{display:none}
+.side-link{white-space:nowrap}
+.sidebar-footer{display:none}
+.content{padding:18px 16px 40px}
 }`
 
 const ScriptJS = `"use strict";
@@ -242,10 +451,11 @@ var configDirty = false;
 var lastEvents = [];
 var lastProfiles = [];
 var activeProfileName = "";
+var activeEmergencyTemp = 52;
 
 var themeColors = getComputedStyle(document.documentElement);
 var colorFan = themeColors.getPropertyValue("--blue").trim() || "#3b82f6";
-var colorTemp = themeColors.getPropertyValue("--orange").trim() || "#f59e0b";
+var colorTemp = themeColors.getPropertyValue("--purple").trim() || "#8b5cf6";
 
 function token() { return byId("token").value.trim(); }
 
@@ -305,48 +515,139 @@ function labelForMode(mode) {
   }
 }
 
-function classForMode(mode) {
+function badgeClassForMode(mode) {
   switch (mode) {
-    case "emergency": case "failsafe": return "bad";
-    case "array-boost": return "warn";
-    case "automatic": return "ok";
-    default: return "";
+    case "emergency": case "failsafe": return "badge-red";
+    case "array-boost": return "badge-yellow";
+    case "automatic": return "badge-green";
+    default: return "badge-neutral";
   }
+}
+
+function levelClass(percentBad) {
+  if (percentBad >= 90) { return "bad"; }
+  if (percentBad >= 70) { return "warn"; }
+  return "ok";
+}
+
+function clampPct(value) { return Math.max(0, Math.min(100, value || 0)); }
+
+function formatUptime(seconds) {
+  seconds = Math.max(0, seconds || 0);
+  var days = Math.floor(seconds / 86400);
+  var hours = Math.floor((seconds % 86400) / 3600);
+  var minutes = Math.floor((seconds % 3600) / 60);
+  if (days > 0) { return days + "d " + hours + "h"; }
+  if (hours > 0) { return hours + "h " + minutes + "m"; }
+  return minutes + "m";
+}
+
+function metaSpan(container, text) {
+  var span = document.createElement("span");
+  span.textContent = text;
+  container.appendChild(span);
 }
 
 async function refreshStatus() {
   var data = await getJSON("/api/status");
   var status = data.status;
+
   byId("version").textContent = status.version ? "v" + status.version : "";
-  byId("mode").textContent = labelForMode(status.mode);
-  byId("mode").className = "stat-value " + classForMode(status.mode);
-  byId("profile").textContent = status.active_profile || "-";
+  byId("infoVersion").textContent = status.version ? "v" + status.version : "";
+
   byId("fan").textContent = status.fan_percent + " %";
-  byId("fanMeter").style.width = Math.max(0, Math.min(100, status.fan_percent || 0)) + "%";
+  byId("fanMeter").style.width = clampPct(status.fan_percent) + "%";
+  byId("fanMetaLeft").textContent = status.fan_percent + " %";
+  byId("fanMetaRight").textContent = labelForMode(status.mode);
+
+  var tempRatio = status.temperature_valid ? clampPct(Math.round((status.maximum_disk_temperature / activeEmergencyTemp) * 100)) : null;
   byId("temp").textContent = status.temperature_valid ? status.maximum_disk_temperature + " °C" : "unbekannt";
-  byId("temp").className = "stat-value " + (status.temperature_valid ? "" : "bad");
-  byId("array").textContent = status.array_operation && status.array_operation !== "none" ? status.array_operation : "inaktiv";
-  byId("reason").textContent = status.reason || "-";
+  var tempMeter = byId("tempMeter");
+  var marginMeter = byId("marginMeter");
+  if (tempRatio === null) {
+    tempMeter.style.width = "0%";
+    tempMeter.className = "meter-fill bad";
+    marginMeter.style.width = "0%";
+    marginMeter.className = "meter-fill bad";
+    byId("tempMetaLeft").textContent = "-";
+    byId("margin").textContent = "-";
+    byId("marginMetaLeft").textContent = "-";
+  } else {
+    tempMeter.style.width = tempRatio + "%";
+    tempMeter.className = "meter-fill " + levelClass(tempRatio);
+    var margin = clampPct(100 - tempRatio);
+    marginMeter.style.width = margin + "%";
+    marginMeter.className = "meter-fill " + levelClass(tempRatio);
+    byId("tempMetaLeft").textContent = tempRatio + " % von " + activeEmergencyTemp + " °C";
+    byId("margin").textContent = margin + " %";
+    byId("marginMetaLeft").textContent = margin + " %";
+  }
+  byId("tempMetaRight").textContent = status.disks_reporting + " HDD" + (status.disks_reporting === 1 ? "" : "s");
+  byId("marginMetaRight").textContent = "Grenze " + activeEmergencyTemp + " °C";
+
+  byId("modeBadge").textContent = labelForMode(status.mode);
+  byId("modeBadge").className = "badge " + badgeClassForMode(status.mode);
+  byId("profileBadge").textContent = status.active_profile || "-";
+
+  var metaContainer = byId("infoMeta");
+  metaContainer.textContent = "";
+  metaSpan(metaContainer, "Bus " + (status.i2c_bus !== undefined ? status.i2c_bus : "-"));
+  metaSpan(metaContainer, status.i2c_address || "-");
+  metaSpan(metaContainer, "Laufzeit " + formatUptime(status.uptime_seconds));
+  metaSpan(metaContainer, "Array: " + (status.array_operation && status.array_operation !== "none" ? status.array_operation : "inaktiv"));
+
   byId("controller").textContent = status.controller_online ? "online" : "offline";
   byId("controllerDot").className = "dot " + (status.controller_online ? "dot-ok" : "dot-bad");
+  byId("sidebarStatus").textContent = status.controller_online ? "online" : "offline";
+  byId("sidebarDot").className = "dot " + (status.controller_online ? "dot-ok" : "dot-bad");
+
+  byId("reason").textContent = status.reason || "-";
   setBanner(status);
 
   activeProfileName = status.active_profile || "";
-  renderProfileButtons();
+  renderProfileTable();
 }
 
-function renderProfileButtons() {
-  var container = byId("profiles");
-  container.textContent = "";
+function renderProfileTable() {
+  var body = byId("profileTable");
+  body.textContent = "";
   lastProfiles.forEach(function (profile) {
-    var button = document.createElement("button");
-    button.type = "button";
-    button.className = "seg-btn" + (profile.id === activeProfileName ? " active" : "");
-    button.textContent = profile.label;
-    button.addEventListener("click", function () {
-      post("/api/profile/" + encodeURIComponent(profile.id));
-    });
-    container.appendChild(button);
+    var tr = document.createElement("tr");
+
+    var nameTd = document.createElement("td");
+    var strong = document.createElement("strong");
+    strong.textContent = profile.label;
+    nameTd.appendChild(strong);
+
+    var boostTd = document.createElement("td");
+    boostTd.textContent = (profile.boost === undefined ? "-" : profile.boost + " %");
+
+    var emergencyTd = document.createElement("td");
+    emergencyTd.textContent = (profile.emergencyTemp === undefined ? "-" : profile.emergencyTemp + " °C");
+
+    var statusTd = document.createElement("td");
+    if (profile.id === activeProfileName) {
+      var badge = document.createElement("span");
+      badge.className = "badge badge-green";
+      badge.style.marginLeft = "0";
+      badge.textContent = "Aktiv";
+      statusTd.appendChild(badge);
+    } else {
+      var button = document.createElement("button");
+      button.type = "button";
+      button.className = "pill-btn pill-ghost table-action";
+      button.textContent = "Aktivieren";
+      button.addEventListener("click", function () {
+        post("/api/profile/" + encodeURIComponent(profile.id));
+      });
+      statusTd.appendChild(button);
+    }
+
+    tr.appendChild(nameTd);
+    tr.appendChild(boostTd);
+    tr.appendChild(emergencyTd);
+    tr.appendChild(statusTd);
+    body.appendChild(tr);
   });
 }
 
@@ -358,9 +659,12 @@ async function refreshConfig(force) {
   }
   var profiles = config.profiles || {};
   lastProfiles = Object.keys(profiles).map(function (id) {
-    return { id: id, label: (profiles[id] && profiles[id].name) || id };
+    var profile = profiles[id] || {};
+    return { id: id, label: profile.name || id, boost: profile.array_boost_percent, emergencyTemp: profile.emergency_temperature };
   });
-  renderProfileButtons();
+  var current = profiles[config.active_profile];
+  if (current && current.emergency_temperature) { activeEmergencyTemp = current.emergency_temperature; }
+  renderProfileTable();
 }
 
 // Rows are built with DOM nodes instead of innerHTML, because event messages
@@ -369,9 +673,11 @@ function renderEvents() {
   var query = byId("eventFilter").value.trim().toLowerCase();
   var body = byId("events");
   body.textContent = "";
+  var shown = 0;
   lastEvents.slice().reverse().forEach(function (event) {
     var haystack = (String(event.type) + " " + String(event.message)).toLowerCase();
     if (query && haystack.indexOf(query) === -1) { return; }
+    shown++;
     var tr = document.createElement("tr");
     [new Date(event.time).toLocaleString(), event.type, event.message].forEach(function (cell) {
       var td = document.createElement("td");
@@ -380,6 +686,7 @@ function renderEvents() {
     });
     body.appendChild(tr);
   });
+  byId("eventsFooter").textContent = "Zeige " + shown + " von " + lastEvents.length + " Ereignissen";
 }
 
 async function refreshEvents() {
@@ -406,7 +713,7 @@ function drawArea(canvas, points, valueKey, color, minFloor, maxFloor, suffix) {
   ctx.font = "11px Inter, system-ui, sans-serif";
 
   if (!points || points.length < 2) {
-    ctx.fillStyle = "#71717a";
+    ctx.fillStyle = "#6d6d80";
     ctx.fillText("Noch keine Messpunkte", 12, height / 2);
     return;
   }
@@ -431,7 +738,7 @@ function drawArea(canvas, points, valueKey, color, minFloor, maxFloor, suffix) {
     ctx.lineTo(width - padRight, y);
     ctx.stroke();
     var value = Math.round(maxValue - i * span / gridLines);
-    ctx.fillStyle = "#71717a";
+    ctx.fillStyle = "#6d6d80";
     ctx.fillText(value + suffix, 2, y + 4);
   }
 
@@ -460,7 +767,7 @@ function drawArea(canvas, points, valueKey, color, minFloor, maxFloor, suffix) {
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  ctx.fillStyle = "#71717a";
+  ctx.fillStyle = "#6d6d80";
   ctx.fillText(new Date(points[0].time).toLocaleString(), padLeft, height - 4);
   var last = new Date(points[points.length - 1].time).toLocaleString();
   ctx.fillText(last, Math.max(padLeft, width - padRight - ctx.measureText(last).width), height - 4);
@@ -483,6 +790,26 @@ async function refreshAll() {
   } catch (error) {
     say(String(error));
   }
+}
+
+function setupSectionObserver() {
+  if (!("IntersectionObserver" in window)) { return; }
+  var links = Array.prototype.slice.call(document.querySelectorAll(".side-link"));
+  var sections = links
+    .map(function (link) { return document.getElementById(link.dataset.section); })
+    .filter(function (section) { return Boolean(section); });
+  if (sections.length === 0) { return; }
+
+  var observer = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      if (!entry.isIntersecting) { return; }
+      links.forEach(function (link) { link.classList.remove("active"); });
+      var match = links.filter(function (link) { return link.dataset.section === entry.target.id; })[0];
+      if (match) { match.classList.add("active"); }
+    });
+  }, { rootMargin: "-15% 0px -70% 0px", threshold: 0 });
+
+  sections.forEach(function (section) { observer.observe(section); });
 }
 
 function wire() {
@@ -511,6 +838,7 @@ function wire() {
   });
 
   window.addEventListener("resize", function () { refreshHistory(); });
+  setupSectionObserver();
 
   refreshAll();
   setInterval(refreshStatus, 3000);

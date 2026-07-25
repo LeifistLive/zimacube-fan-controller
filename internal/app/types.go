@@ -43,6 +43,8 @@ type Status struct {
 	Version                string    `json:"version"`
 	Mode                   string    `json:"mode"`
 	ActiveProfile          string    `json:"active_profile"`
+	I2CBus                 int       `json:"i2c_bus"`
+	I2CAddress             string    `json:"i2c_address"`
 	FanPercent             int       `json:"fan_percent"`
 	MaximumDiskTemperature int       `json:"maximum_disk_temperature"`
 	TemperatureValid       bool      `json:"temperature_valid"`
