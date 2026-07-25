@@ -104,4 +104,3 @@ func TestAppendPrunesOldLines(t *testing.T) {
 		t.Fatalf("neuester Punkt fehlt, Temperatur = %d", newest.Temperature)
 	}
 }
-

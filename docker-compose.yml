@@ -3,7 +3,9 @@ services:
     build:
       context: .
       args:
-        VERSION: "${VERSION:-dev}"
+        # Leer lassen: das Dockerfile faellt dann auf die VERSION-Datei im
+        # Repo zurueck. Nur setzen, um eine andere Versionsnummer zu erzwingen.
+        VERSION: "${VERSION:-}"
 
     image: zimacube-fan-controller:local
     container_name: zimacube-fan-controller

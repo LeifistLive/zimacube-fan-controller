@@ -17,13 +17,13 @@ func TestParseCurveSortsAndValidates(t *testing.T) {
 
 func TestParseCurveRejectsBadInput(t *testing.T) {
 	cases := map[string]string{
-		"leer":              "",
-		"kein Doppelpunkt":  "40",
-		"keine Zahl":        "abc:50",
-		"Prozent zu klein":  "40:0",
-		"Prozent zu gross":  "40:120",
-		"doppelte Temp":     "40:50,40:60",
-		"fallende Prozente": "30:80,40:50",
+		"leer":               "",
+		"kein Doppelpunkt":   "40",
+		"keine Zahl":         "abc:50",
+		"Prozent zu klein":   "40:0",
+		"Prozent zu gross":   "40:120",
+		"doppelte Temp":      "40:50,40:60",
+		"fallende Prozente":  "30:80,40:50",
 		"Temp unrealistisch": "500:50",
 	}
 	for name, raw := range cases {

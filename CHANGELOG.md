@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.1.1
+
+### Behoben
+
+- Ein per Portainer-Git-Stack lokal gebautes Image zeigte im Dashboard und in
+  `/api/health` immer `vdev` statt der echten Versionsnummer, weil
+  `docker-compose.yml` den `VERSION`-Build-Arg ohne gesetzte Umgebungsvariable
+  fest auf `dev` setzte. Eine `VERSION`-Datei im Repo-Root ist jetzt die
+  Quelle der Wahrheit; das Dockerfile liest sie automatisch, sofern kein
+  `VERSION`-Arg übergeben wird (CI setzt ihn weiterhin aus dem Git-Tag)
+
 ## 3.1.0
 
 ### Behoben

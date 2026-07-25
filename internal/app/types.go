@@ -7,7 +7,9 @@ import (
 )
 
 // Version is reported through the API and shown in the web UI. It is set at
-// build time via -ldflags "-X .../internal/app.Version=..." (see Dockerfile);
+// build time via -ldflags "-X .../internal/app.Version=..." (see Dockerfile),
+// which in turn reads the repo-root VERSION file unless the VERSION build arg
+// is explicitly overridden (CI does this from the git tag, see ghcr.yml).
 // "dev" is what `go run`/`go test` and unlinked builds fall back to.
 var Version = "dev"
 

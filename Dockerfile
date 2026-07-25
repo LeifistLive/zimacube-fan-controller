@@ -1,4 +1,8 @@
-ARG VERSION=dev
+# Leer per Default: die VERSION-Datei im Repo ist die eigentliche Quelle der
+# Wahrheit, damit auch ein reiner Portainer-Git-Stack-Build (ohne CI, ohne
+# gesetzte VERSION-Umgebungsvariable) die richtige Versionsnummer einbrennt.
+# CI (ghcr.yml) kann hierueber trotzdem einen Git-Tag-Wert erzwingen.
+ARG VERSION=
 
 # Digest-gepinnt, damit ein Rebuild nicht ungeprüft ein neues Basisimage zieht.
 # Beide Digests zeigen auf multi-arch Manifest-Listen (amd64 + arm64), --platform
@@ -12,12 +16,14 @@ ARG TARGETARCH
 COPY go.mod go.su[m] ./
 COPY cmd ./cmd
 COPY internal ./internal
+COPY VERSION ./VERSION
 # vet und Tests laufen im Build, damit ein Portainer-Deployment ohne CI nicht
 # mit einem defekten Binary endet. Sie laufen unter BUILDPLATFORM (nativ, ohne
 # Emulation); nur der eigentliche Build unten kreuzkompiliert auf TARGETOS/ARCH.
 RUN go vet ./... && go test ./...
-RUN GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath \
-	-ldflags="-s -w -X github.com/LeifistLive/zimacube-fan-controller/internal/app.Version=${VERSION}" \
+RUN APP_VERSION="${VERSION:-$(cat VERSION)}" && \
+	GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath \
+	-ldflags="-s -w -X github.com/LeifistLive/zimacube-fan-controller/internal/app.Version=${APP_VERSION}" \
 	-o /out/zimafan ./cmd/zimafan
 
 FROM alpine:3.22@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce

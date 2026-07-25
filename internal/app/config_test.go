@@ -78,12 +78,12 @@ func TestNormalizeRejectsBrokenProfiles(t *testing.T) {
 			ActiveProfile: "p",
 			Profiles:      map[string]Profile{"": base},
 		},
-		"leere Kurve":              withProfile(func(p *Profile) { p.Curve = nil }),
-		"Kurvenprozent ungültig":   withProfile(func(p *Profile) { p.Curve[0].Percent = 0 }),
-		"Boost ungültig":           withProfile(func(p *Profile) { p.ArrayBoostPercent = 0 }),
-		"Notfallprozent ungültig":  withProfile(func(p *Profile) { p.EmergencyPercent = 120 }),
+		"leere Kurve":               withProfile(func(p *Profile) { p.Curve = nil }),
+		"Kurvenprozent ungültig":    withProfile(func(p *Profile) { p.Curve[0].Percent = 0 }),
+		"Boost ungültig":            withProfile(func(p *Profile) { p.ArrayBoostPercent = 0 }),
+		"Notfallprozent ungültig":   withProfile(func(p *Profile) { p.EmergencyPercent = 120 }),
 		"Notfalltemperatur zu tief": withProfile(func(p *Profile) { p.EmergencyTemperature = 5 }),
-		"Hysterese negativ":        withProfile(func(p *Profile) { p.HysteresisC = -1 }),
+		"Hysterese negativ":         withProfile(func(p *Profile) { p.HysteresisC = -1 }),
 	}
 
 	for name, config := range cases {
