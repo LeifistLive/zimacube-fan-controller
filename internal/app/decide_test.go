@@ -56,11 +56,17 @@ func TestDecideArrayBoostBeatsManual(t *testing.T) {
 	}
 }
 
+// Bei 50 Grad liefert die Kurve schon 100 Prozent, der Boost mit 90 Prozent
+// darf das nicht absenken. Die Notfallgrenze liegt bei 52 Grad, der Modus
+// bleibt also Automatik.
 func TestDecideArrayBoostDoesNotLowerSpeed(t *testing.T) {
 	profile := testProfile(t)
 	result := decide(profile, valid(50, "parity-check"), Override{}, 0)
-	if result.Percent != 100 || result.Mode != ModeEmergency {
-		t.Fatalf("Boost darf die Drehzahl nicht senken: %+v", result)
+	if result.Percent != 100 {
+		t.Fatalf("Boost senkt die Drehzahl: %+v", result)
+	}
+	if result.Mode != ModeAutomatic {
+		t.Fatalf("Modus = %q, erwartet %q: %+v", result.Mode, ModeAutomatic, result)
 	}
 }
 
