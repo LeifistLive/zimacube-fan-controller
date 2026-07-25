@@ -39,7 +39,7 @@ func ReadDiskTemperatures(path string) (DiskTemperatures, error) {
 	if err != nil {
 		return result, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -134,7 +134,7 @@ func readINI(path string) (map[string]string, error) {
 	if err != nil {
 		return result, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {

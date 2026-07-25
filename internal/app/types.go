@@ -6,8 +6,10 @@ import (
 	"github.com/LeifistLive/zimacube-fan-controller/internal/controller"
 )
 
-// Version is reported through the API and shown in the web UI.
-const Version = "3.1.0"
+// Version is reported through the API and shown in the web UI. It is set at
+// build time via -ldflags "-X .../internal/app.Version=..." (see Dockerfile);
+// "dev" is what `go run`/`go test` and unlinked builds fall back to.
+var Version = "dev"
 
 // Modes reported in Status.Mode.
 const (

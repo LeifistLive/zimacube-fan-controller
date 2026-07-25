@@ -79,21 +79,21 @@ func (s *Store) SaveJSON(name string, value any) error {
 		return err
 	}
 	if _, err := file.Write(data); err != nil {
-		file.Close()
-		os.Remove(tmp)
+		_ = file.Close()
+		_ = os.Remove(tmp)
 		return err
 	}
 	if err := file.Sync(); err != nil {
-		file.Close()
-		os.Remove(tmp)
+		_ = file.Close()
+		_ = os.Remove(tmp)
 		return err
 	}
 	if err := file.Close(); err != nil {
-		os.Remove(tmp)
+		_ = os.Remove(tmp)
 		return err
 	}
 	if err := os.Rename(tmp, path); err != nil {
-		os.Remove(tmp)
+		_ = os.Remove(tmp)
 		return err
 	}
 	return syncDir(s.dir)
@@ -183,7 +183,7 @@ func (s *Store) appendJSONLine(name string, value any) error {
 		return err
 	}
 	if _, err := file.Write(data); err != nil {
-		file.Close()
+		_ = file.Close()
 		return err
 	}
 	if err := file.Close(); err != nil {
@@ -228,32 +228,32 @@ func prune(path string, keep int) (int, error) {
 	writer := bufio.NewWriter(file)
 	for _, line := range lines {
 		if _, err := writer.Write(line); err != nil {
-			file.Close()
-			os.Remove(tmp)
+			_ = file.Close()
+			_ = os.Remove(tmp)
 			return 0, err
 		}
 		if err := writer.WriteByte('\n'); err != nil {
-			file.Close()
-			os.Remove(tmp)
+			_ = file.Close()
+			_ = os.Remove(tmp)
 			return 0, err
 		}
 	}
 	if err := writer.Flush(); err != nil {
-		file.Close()
-		os.Remove(tmp)
+		_ = file.Close()
+		_ = os.Remove(tmp)
 		return 0, err
 	}
 	if err := file.Sync(); err != nil {
-		file.Close()
-		os.Remove(tmp)
+		_ = file.Close()
+		_ = os.Remove(tmp)
 		return 0, err
 	}
 	if err := file.Close(); err != nil {
-		os.Remove(tmp)
+		_ = os.Remove(tmp)
 		return 0, err
 	}
 	if err := os.Rename(tmp, path); err != nil {
-		os.Remove(tmp)
+		_ = os.Remove(tmp)
 		return 0, err
 	}
 	return len(lines), syncDir(filepath.Dir(path))
@@ -269,7 +269,7 @@ func tailLines(path string, limit int) ([][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 0, 64*1024), maxLineBytes)
@@ -321,7 +321,7 @@ func countLines(path string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	buffer := make([]byte, 64*1024)
 	count := 0
@@ -342,6 +342,6 @@ func syncDir(dir string) error {
 	if err != nil {
 		return err
 	}
-	defer handle.Close()
+	defer func() { _ = handle.Close() }()
 	return handle.Sync()
 }

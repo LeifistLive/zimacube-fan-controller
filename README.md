@@ -17,7 +17,7 @@ eine Zieldrehzahl und schreibt sie über `i2cset` (i2c-tools) an den Controller.
 - Persistente Konfiguration, Verlauf und Ereignisse mit automatischer Rotation
 - REST-API mit optionalem API-Token und Schutz gegen Cross-Site-Anfragen
 - Docker-Healthcheck, read-only Container, keine Capabilities
-- GitHub-CI mit Tests und GHCR-Publishing
+- GitHub-CI mit Tests, golangci-lint und GHCR-Publishing für linux/amd64 und linux/arm64
 
 ## Sicherheitsverhalten
 
@@ -82,4 +82,5 @@ Wenn `API_TOKEN` gesetzt ist, wird es aus der Container-Umgebung übernommen.
 go test ./...
 go vet ./...
 gofmt -w .
+golangci-lint run
 ```
