@@ -1,32 +1,61 @@
 #!/bin/sh
+# Kleiner Wrapper um die REST-API, gedacht fuer "docker exec".
 set -eu
 
 BASE_URL="${FANCTL_URL:-http://127.0.0.1:8080}"
 TOKEN="${API_TOKEN:-}"
 COMMAND="${1:-status}"
 
-headers=""
-[ -n "$TOKEN" ] && headers="--header=X-API-Token: $TOKEN"
+usage() {
+	echo "Usage: fanctl status|health|config|auto|emergency|profile NAME|test PERCENT|1-100" >&2
+	exit 2
+}
+
+# Der Header wird als ein einzelnes, gequotetes Argument uebergeben. Frueher
+# wurde die Variable unquotiert expandiert und am Leerzeichen zerlegt, wodurch
+# der Token nie beim Server ankam.
+request() {
+	method="$1"
+	path="$2"
+
+	set -- -qO- --timeout=15
+	if [ "$method" = "POST" ]; then
+		set -- "$@" --method=POST --body-data=
+	fi
+	if [ -n "$TOKEN" ]; then
+		set -- "$@" "--header=X-API-Token: $TOKEN"
+	fi
+
+	exec wget "$@" "$BASE_URL$path"
+}
+
+is_number() {
+	case "$1" in
+		'' | *[!0-9]*) return 1 ;;
+		*) return 0 ;;
+	esac
+}
 
 case "$COMMAND" in
-  status)
-    exec wget -qO- "$BASE_URL/api/status"
-    ;;
-  auto)
-    exec wget -qO- --method=POST $headers "$BASE_URL/api/mode/auto"
-    ;;
-  emergency)
-    exec wget -qO- --method=POST $headers "$BASE_URL/api/mode/emergency"
-    ;;
-  ''|*[!0-9]*)
-    echo "Usage: fanctl status|auto|emergency|1-100" >&2
-    exit 2
-    ;;
-  *)
-    [ "$COMMAND" -ge 1 ] && [ "$COMMAND" -le 100 ] || {
-      echo "Percent must be between 1 and 100" >&2
-      exit 2
-    }
-    exec wget -qO- --method=POST $headers "$BASE_URL/api/fan/$COMMAND"
-    ;;
+	status) request GET /api/status ;;
+	health) request GET /api/health ;;
+	config) request GET /api/config ;;
+	auto) request POST /api/mode/auto ;;
+	emergency) request POST /api/mode/emergency ;;
+	profile)
+		[ -n "${2:-}" ] || usage
+		request POST "/api/profile/$2"
+		;;
+	test)
+		[ -n "${2:-}" ] || usage
+		is_number "$2" || usage
+		[ "$2" -ge 1 ] && [ "$2" -le 100 ] || { echo "Prozentwert muss zwischen 1 und 100 liegen" >&2; exit 2; }
+		request POST "/api/test/$2"
+		;;
+	help | -h | --help) usage ;;
+	*)
+		is_number "$COMMAND" || usage
+		[ "$COMMAND" -ge 1 ] && [ "$COMMAND" -le 100 ] || { echo "Prozentwert muss zwischen 1 und 100 liegen" >&2; exit 2; }
+		request POST "/api/fan/$COMMAND"
+		;;
 esac

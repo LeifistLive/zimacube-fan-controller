@@ -8,34 +8,40 @@ services:
     restart: unless-stopped
 
     devices:
-      - /dev/i2c-0:/dev/i2c-0:rwm
+      # Busnummer und I2C_BUS muessen zusammenpassen, daher dieselbe Variable.
+      - "/dev/i2c-${I2C_BUS:-0}:/dev/i2c-${I2C_BUS:-0}:rwm"
 
     volumes:
-      - /var/local/emhttp/var.ini:/var/local/emhttp/var.ini:ro
-      - /var/local/emhttp/disks.ini:/var/local/emhttp/disks.ini:ro
+      # Das ganze Verzeichnis einbinden, nicht einzelne Dateien: emhttp
+      # schreibt var.ini und disks.ini neu, ein Single-File-Mount zeigt danach
+      # dauerhaft auf den alten Inode und die Temperaturen frieren ein.
+      - /var/local/emhttp:/var/local/emhttp:ro
       - fan-data:/data
 
     environment:
-      TZ: "Europe/Berlin"
-      I2C_BUS: "0"
-      I2C_ADDRESS: "0x69"
+      TZ: "${TZ:-Europe/Berlin}"
+      I2C_BUS: "${I2C_BUS:-0}"
+      I2C_ADDRESS: "${I2C_ADDRESS:-0x69}"
+      I2C_TIMEOUT_SECONDS: "${I2C_TIMEOUT_SECONDS:-5}"
+      I2C_RETRIES: "${I2C_RETRIES:-3}"
 
-      FAN_CURVE: "0:60,36:65,40:75,43:85,46:95,48:100"
-      ARRAY_BOOST_PERCENT: "100"
-      EMERGENCY_TEMP: "52"
-      EMERGENCY_PERCENT: "100"
-      HYSTERESIS_C: "2"
+      CHECK_INTERVAL_SECONDS: "${CHECK_INTERVAL_SECONDS:-15}"
+      HISTORY_INTERVAL_SECONDS: "${HISTORY_INTERVAL_SECONDS:-300}"
+      DETECT_INTERVAL_SECONDS: "${DETECT_INTERVAL_SECONDS:-300}"
 
-      CHECK_INTERVAL_SECONDS: "15"
-      I2C_RETRIES: "3"
-      I2C_TIMEOUT_SECONDS: "5"
+      # Obergrenze fuer history.jsonl und events.jsonl (Zeilen je Datei).
+      MAX_LOG_LINES: "${MAX_LOG_LINES:-20000}"
 
-      LISTEN_ADDRESS: ":8080"
-      # Set a long random token to protect write operations.
-      API_TOKEN: ""
+      # Drehzahl, die beim Beenden gesetzt wird. 0 laesst den letzten Wert stehen.
+      SAFE_SHUTDOWN_PERCENT: "${SAFE_SHUTDOWN_PERCENT:-0}"
+
+      LISTEN_ADDRESS: "0.0.0.0:8080"
+
+      # Dringend empfohlen, sonst kann jeder im LAN die Luefter steuern.
+      API_TOKEN: "${API_TOKEN:-}"
 
     ports:
-      - "192.168.178.123:8086:8080"
+      - "${BIND_ADDRESS:-0.0.0.0}:${HOST_PORT:-8086}:8080"
 
     security_opt:
       - no-new-privileges:true
@@ -49,16 +55,17 @@ services:
       - /tmp:size=2m,nosuid,nodev,noexec
 
     healthcheck:
-      test:
-        - CMD
-        - wget
-        - -q
-        - --spider
-        - http://127.0.0.1:8080/api/health
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/api/health"]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 30s
+      start_period: 20s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   fan-data:

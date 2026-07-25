@@ -3,3 +3,5 @@
 docs
 *.md
 LICENSE
+.env
+.env.example
