@@ -13,7 +13,7 @@ services:
       - /dev/i2c-0:/dev/i2c-0
 
     environment:
-      FAN_PERCENT: "90"
+      FAN_PERCENT: "10"
       I2C_BUS: "0"
       I2C_ADDRESS: "0x69"
 
