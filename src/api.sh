@@ -44,5 +44,5 @@ while true; do
         printf 'Content-Length: %s\r\n' "$length"
         printf 'Connection: close\r\n\r\n'
         printf '%s' "$body"
-    } | nc -l -p "$PORT" -q 1
+    } | nc -l -p "$PORT" -w 2
 done
