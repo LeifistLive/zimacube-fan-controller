@@ -1,0 +1,48 @@
+#!/bin/sh
+set -eu
+
+OVERRIDE_FILE="/tmp/fan-override"
+
+usage() {
+    echo "Usage:"
+    echo "  fanctl 1-100   Set manual fan speed"
+    echo "  fanctl auto    Return to automatic control"
+    echo "  fanctl status  Show current state"
+}
+
+COMMAND="${1:-status}"
+
+case "$COMMAND" in
+    auto)
+        rm -f "$OVERRIDE_FILE"
+        echo "Automatic fan control enabled."
+        ;;
+
+    status)
+        if [ -f "$OVERRIDE_FILE" ]; then
+            echo "Mode: manual"
+            echo "Requested speed: $(cat "$OVERRIDE_FILE")%"
+        else
+            echo "Mode: automatic"
+        fi
+
+        if [ -f /tmp/fan-state ]; then
+            cat /tmp/fan-state
+        fi
+        ;;
+
+    *[!0-9]*|'')
+        usage
+        exit 2
+        ;;
+
+    *)
+        if [ "$COMMAND" -lt 1 ] || [ "$COMMAND" -gt 100 ]; then
+            echo "Error: Percentage must be between 1 and 100." >&2
+            exit 2
+        fi
+
+        printf '%s\n' "$COMMAND" > "$OVERRIDE_FILE"
+        echo "Manual fan speed requested: ${COMMAND}%"
+        ;;
+esac
