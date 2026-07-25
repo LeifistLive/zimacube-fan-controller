@@ -11,11 +11,16 @@ services:
     devices:
       - /dev/i2c-0:/dev/i2c-0
 
+    environment:
+      FAN_PERCENT: "90"
+      I2C_BUS: "0"
+      I2C_ADDRESS: "0x69"
+
     security_opt:
       - no-new-privileges:true
 
+    cap_drop:
+      - ALL
+
     cap_add:
       - SYS_RAWIO
-
-    environment:
-      FAN_PWM_HEX: "0x5a"

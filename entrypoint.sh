@@ -1,32 +1,32 @@
 #!/bin/sh
-set -e
+set -eu
 
-BUS=0
-ADDRESS=0x69
+BUS="${I2C_BUS:-0}"
+ADDRESS="${I2C_ADDRESS:-0x69}"
+FAN_PERCENT="${FAN_PERCENT:-90}"
 
-# Standard = 90 %
-HEX=${FAN_PWM_HEX:-0x5a}
+if [ "$FAN_PERCENT" -lt 1 ] || [ "$FAN_PERCENT" -gt 100 ]; then
+    echo "FAN_PERCENT must be between 1 and 100"
+    exit 1
+fi
+
+FAN_HEX=$(printf "0x%02x" "$FAN_PERCENT")
 
 echo "Waiting for /dev/i2c-${BUS}..."
 
 for i in $(seq 1 30); do
-
-    if [ -e /dev/i2c-${BUS} ]; then
-
-        echo "Found controller."
+    if [ -e "/dev/i2c-${BUS}" ]; then
+        echo "Setting fan speed to ${FAN_PERCENT}% (${FAN_HEX})"
 
         i2cset -f -y "$BUS" "$ADDRESS" 0x04 \
-            0x01 "$HEX" 0x00 0x00 0x00 0x00 0x01 0x00 i
+            0x01 "$FAN_HEX" 0x00 0x00 0x00 0x00 0x01 0x00 i
 
-        echo "Fan speed applied."
-
+        echo "Done."
         exec sleep infinity
     fi
 
     sleep 2
-
 done
 
-echo "Fan controller not found."
-
+echo "I2C device not found."
 exit 1
