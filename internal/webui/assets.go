@@ -603,27 +603,47 @@ padding:32px 28px;text-align:center;
 .login-error{color:#fca5a5;font-size:.82rem;margin-top:12px}
 .login-error[hidden]{display:none}
 
+/* Below 900px the sidebar becomes a fixed bottom tab bar instead of a
+   horizontally scrolling row: five items plus the full-width brand no
+   longer fit on a phone screen, and a couple of tabs (Events,
+   Configuration) ended up scrolled out of view with no hint that they were
+   still reachable. A bottom bar with justify-content:space-around always
+   shows all five tabs at once, no scrolling needed, and matches the
+   navigation pattern phone users already expect from native apps. */
 @media (max-width:900px){
 .shell{flex-direction:column}
 .sidebar{
-width:100%;flex:0 0 auto;height:auto;position:relative;
-flex-direction:row;align-items:center;gap:14px;padding:14px 16px;overflow-x:auto;
+width:100%;flex:0 0 auto;height:auto;position:fixed;top:auto;bottom:0;left:0;right:0;
+flex-direction:row;align-items:stretch;gap:0;
+padding:6px 4px calc(6px + env(safe-area-inset-bottom));
+border-right:none;border-top:1px solid var(--border);
+box-shadow:0 -2px 16px rgba(0,0,0,.16);
+z-index:20;
 }
-.brand{padding:0;flex:0 0 auto}
-.side-nav{flex-direction:row;margin-top:0;flex:0 0 auto}
+.brand{display:none}
+.side-nav{flex-direction:row;margin-top:0;flex:1;justify-content:space-around;gap:0}
 .side-nav-label{display:none}
-.side-link{white-space:nowrap}
+.side-link{
+flex:1;flex-direction:column;justify-content:center;gap:3px;
+padding:6px 2px;border-left:none;border-radius:8px;
+font-size:.66rem;text-align:center;white-space:nowrap;
+}
+.side-link svg{width:20px;height:20px;margin:0 auto}
+/* A bottom border reads as the active-tab indicator here, mirroring the
+   left border used in the vertical desktop sidebar. */
+.side-link.active{border-left:none;border-radius:8px;box-shadow:inset 0 -3px 0 var(--purple)}
 /* Purely informational (the same online/offline state is already visible
    on the Status page), so hiding it to save space is fine here - unlike
    logout, which now lives in the page header instead and stays reachable
    on every screen size regardless. */
 .sidebar-footer{display:none}
-.content{padding:18px 16px 40px}
+.content{padding:18px 16px calc(78px + env(safe-area-inset-bottom))}
 }
 
 @media (max-width:480px){
 .mode-btn{padding:9px 6px;font-size:.78rem}
 .filter-input{width:100%}
+.side-link{font-size:.62rem}
 }`
 
 const ScriptJS = `"use strict";

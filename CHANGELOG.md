@@ -1,5 +1,16 @@
 # Changelog
 
+## 4.5.1
+
+### Fixed
+
+- Mobile navigation (≤900px): the sidebar was a horizontally scrolling row
+  that no longer fit its five tabs plus the brand logo on a phone screen —
+  Events and Configuration were scrolled out of view with no indication
+  more tabs existed. It is now a fixed bottom tab bar (the brand is hidden
+  on mobile to make room), showing all five tabs at once with no scrolling,
+  matching the navigation pattern phone users expect from native apps.
+
 ## 4.5.0
 
 ### Changed
