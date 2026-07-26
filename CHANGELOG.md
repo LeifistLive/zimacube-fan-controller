@@ -1,276 +1,319 @@
 # Changelog
 
+## 4.5.0
+
+### Changed
+
+- Translated the entire project to English: the web dashboard (all labels,
+  buttons, status text, and messages), every Go source and test file
+  (comments and log/error messages), the Dockerfile, docker-compose.yml, CI
+  workflow, `scripts/fanctl`, `.env.example`, and the docs
+  (`docs/API.md`, `docs/INSTALL.md`, this changelog). No functional changes;
+  `go build`/`go vet`/`go test`/`gofmt` all pass unchanged.
+
+## 4.4.0
+
+### Fixed
+
+- Mobile view (≤900px): `.sidebar-footer` was hidden entirely, but it held
+  the only logout button – logging out was therefore unreachable on a phone.
+  Logout now lives in the page header (next to refresh/theme toggle), so it
+  stays visible at every screen size without horizontal scrolling. Checked
+  at several breakpoints (375px, 750px, 1280px): no more horizontal overflow
+
+### Added
+
+- Event list: choose entries per page (10 or 25) next to the page
+  navigation, the choice is remembered in the browser (localStorage)
+
+## 4.3.1
+
+### Fixed
+
+- Removed a stale CI comment: `go.sum` has not been "dependency-free" since
+  `golang.org/x/crypto` (bcrypt) was added; `actions/setup-go` now caches
+  modules again (`cache: true`), since there is now a real basis (`go.sum`)
+  for that
+
+### Documented (no behavior change)
+
+- The healthcheck is deliberately defined twice (`Dockerfile` for
+  `docker run`/GHCR images without Compose, `docker-compose.yml` overrides
+  it for Compose deployments) – both places now carry a comment pointing at
+  the other, so they stay in sync
+- Duplicate `go vet`/`go test` runs (once in GitHub CI, once in the
+  `Dockerfile` build) and `tailLines()`, which reads the whole file instead
+  of from the end: both reviewed and deliberately left unchanged, see the
+  review discussion – not a real problem at the project's current size
+
 ## 4.3.0
 
-### Kritisch behoben
+### Critical Fix
 
-- Ein `ADMIN_PASSWORD` über 72 Byte ließ bcrypt fehlschlagen; der Code
-  behauptete "fail closed", setzte `enabled` aber faktisch nie und ließ das
-  Dashboard damit ohne jeden Login offen. `newAuth` gibt jetzt einen Fehler
-  zurück, `New()`/der Dienst starten in diesem Fall gar nicht erst
+- An `ADMIN_PASSWORD` over 72 bytes made bcrypt fail; the code claimed
+  "fail closed" but in practice never set `enabled`, leaving the dashboard
+  open without any login. `newAuth` now returns an error, and `New()`/the
+  service refuse to start in that case
 
-### Behoben
+### Fixed
 
-- `a.state.reapplyAt` wurde in `evaluate()` außerhalb des Locks gelesen;
-  jetzt Teil desselben unter `RLock()` erstellten Snapshots wie die übrigen
-  Loop-Statusfelder
-- `storageOK` war ein einzelnes globales Flag: ein erfolgreicher
-  History-Schreibvorgang konnte einen weiterhin ungelösten Config-Fehler
-  verdecken. Jetzt pro Kategorie (config/override/history/events) getrennt
-  verfolgt, `storage` in `/api/health` ist nur `true`, wenn alle vier zuletzt
-  erfolgreich waren
-- `Store.Remove()` synct jetzt das Verzeichnis nach dem Löschen (dieselbe
-  Garantie, die `SaveJSON` beim Schreiben schon hatte)
-- Fehler bei der Logrotation (Zeilenzählung, Prune) werden jetzt geloggt
-  statt still verschluckt
-- Sessions und Login-Rate-Limits pro IP wurden bisher nur beim erneuten
-  Zugriff auf denselben (dann abgelaufenen) Eintrag entfernt; ein
-  stündlicher Sweep räumt jetzt abgelaufene Sessions und veraltete
-  Rate-Limits aktiv auf
-- Das Session-Cookie bekommt `Secure`, sobald die Anfrage über TLS ankam
-  (direkt oder `X-Forwarded-Proto: https`); bei reinem HTTP unverändert
-- Der Login-Rate-Limiter war global (ein Client konnte damit jeden anderen,
-  inklusive des echten Admins, aussperren); jetzt pro Client-IP
-- Profilnamen und Anzeigenamen haben jetzt eine Längenbegrenzung (64 Zeichen)
+- `a.state.reapplyAt` was read outside the lock in `evaluate()`; it is now
+  part of the same snapshot taken under `RLock()` as the other loop state
+  fields
+- `storageOK` was a single global flag: a successful history write could
+  mask a still-unresolved config error. Now tracked separately per category
+  (config/override/history/events); `storage` in `/api/health` is only
+  `true` when all four last succeeded
+- `Store.Remove()` now syncs the directory after deleting (the same
+  guarantee `SaveJSON` already gave on writes)
+- Log rotation errors (line counting, pruning) are now logged instead of
+  being silently swallowed
+- Sessions and per-IP login rate limits were previously only removed when
+  the same (by then expired) entry was accessed again; an hourly sweep now
+  actively cleans up expired sessions and stale rate limits
+- The session cookie gets `Secure` as soon as the request arrived over TLS
+  (directly or via `X-Forwarded-Proto: https`); unchanged over plain HTTP
+- The login rate limiter was global (one client could lock out every other
+  client, including the real admin); now per client IP
+- Profile names and display names now have a length limit (64 characters)
 
 ## 4.2.1
 
-### Geprüft
+### Audited
 
-- Audit: der Dienst greift nie direkt auf die Festplatten zu. `disks.ini`/
-  `var.ini` werden nur von Unraids eigener RAM-Datei gelesen (unabhängig vom
-  Poll-Intervall kein Plattenzugriff), I²C spricht ausschließlich den
-  Fan-Controller-Chip an, nirgends wird `smartctl`/`hdparm` aufgerufen.
-  Einzige Voraussetzung: `/data` muss auf nicht-Array-Speicher bleiben (wie
-  im mitgelieferten `fan-data`-Docker-Volume), da die Verlaufs-/Event-Datei
-  alle paar Minuten geschrieben wird. Das ist jetzt in
-  [docker-compose.yml](docker-compose.yml), [README.md](README.md) und einem
-  Code-Kommentar an `Config.DataDir` dokumentiert, um versehentliches
-  Umbiegen auf eine Array-Platte zu verhindern.
+- Audit: the service never accesses the hard drives directly. `disks.ini`/
+  `var.ini` are only read from Unraid's own RAM-backed file (no disk access
+  regardless of the poll interval), I²C only talks to the fan controller
+  chip, and `smartctl`/`hdparm` are called nowhere. The only requirement:
+  `/data` must stay on non-array storage (as in the bundled `fan-data`
+  Docker volume), since the history/event file is written every few
+  minutes. This is now documented in
+  [docker-compose.yml](docker-compose.yml), [README.md](README.md), and a
+  code comment on `Config.DataDir`, to prevent accidentally redirecting it
+  to an array disk.
 
 ## 4.2.0
 
-### Neu und verbessert
+### Added and Improved
 
-- Browser drosseln `setInterval` in Hintergrund-Tabs stark (teils auf einmal
-  pro Minute oder seltener), wodurch das Dashboard in einem inaktiven Tab
-  lange auf veralteten Daten stehen blieb und erst beim Zurückwechseln
-  "aufwachte". Ein `visibilitychange`/`focus`-Listener löst jetzt sofort
-  einen vollständigen Refresh aus, sobald der Tab wieder sichtbar/aktiv wird
-- `fetch`-Aufrufe haben jetzt ein 10-Sekunden-Timeout (`AbortController`);
-  eine nach Standby oder Netzwerkwechsel hängende Anfrage blockiert die
-  Oberfläche nicht mehr unbegrenzt
-- Der Verlauf-Chart wird beim Wechsel auf die Verlauf-Seite immer neu
-  gezeichnet: `canvas.clientWidth` ist 0, solange die Seite nicht sichtbar
-  ist, wodurch ein Redraw, der zufällig im Hintergrund lief, das Diagramm in
-  falscher Breite gezeichnet haben konnte
+- Browsers heavily throttle `setInterval` in background tabs (sometimes to
+  once a minute or less), which left the dashboard sitting on stale data for
+  a long time in an inactive tab and only "waking up" when switched back to.
+  A `visibilitychange`/`focus` listener now triggers an immediate full
+  refresh as soon as the tab becomes visible/active again
+- `fetch` calls now have a 10-second timeout (`AbortController`); a request
+  stuck after standby or a network change no longer blocks the UI
+  indefinitely
+- The history chart is always redrawn when switching to the History page:
+  `canvas.clientWidth` is 0 while the page is not visible, so a redraw that
+  happened to run in the background could have drawn the chart at the wrong
+  width
 
 ## 4.1.2
 
-### Behoben
+### Fixed
 
-- Die eigentliche Ursache dafür, dass Prozent-Eingabe und Testknöpfe bei
-  Automatik/Notfall sichtbar blieben: `.controls-row` setzt `display:flex`
-  als Autor-Regel, die das `hidden`-Attribut (nur Browser-Standardregel mit
-  gleicher Spezifität) immer überstimmt – unabhängig vom Attribut selbst.
-  Das JS setzte `hidden` also korrekt, es hatte nur nie eine sichtbare
-  Wirkung. `.controls-row[hidden]{display:none}` erzwingt das jetzt explizit
-  (dasselbe Muster wie zuvor schon bei `.chart-tooltip` und `.login-error`).
-  Der vorherige 4.1.1-Fix (Button/Zeilen aus demselben Zustand ableiten)
-  bleibt zusätzlich bestehen.
+- The actual reason the percent input and test buttons stayed visible in
+  Automatic/Emergency: `.controls-row` sets `display:flex` as an author
+  rule, which always overrides the `hidden` attribute (only a browser
+  default rule at equal specificity) – regardless of the attribute itself.
+  The JS was setting `hidden` correctly, it just never had a visible effect.
+  `.controls-row[hidden]{display:none}` now enforces this explicitly (the
+  same pattern already used for `.chart-tooltip` and `.login-error`). The
+  previous 4.1.1 fix (deriving the button/rows from the same state) remains
+  in place as well.
 
 ## 4.1.1
 
-### Behoben
+### Fixed
 
-- Nach Klick auf "Manuell" ohne anschließendes "Setzen" hob der nächste
-  Status-Poll wieder "Automatik" hervor, während Prozent-Eingabe und
-  Testknöpfe trotzdem sichtbar blieben (Button und Zeilen liefen über
-  getrennten Zustand auseinander). Beide werden jetzt aus demselben Wert
-  abgeleitet, können also nicht mehr auseinanderlaufen; ein echter,
-  anderswo gesetzter Override (z. B. Notfall) überschreibt eine offene,
-  aber nie bestätigte Manuell-Ansicht weiterhin korrekt.
+- After clicking "Manual" without then clicking "Set", the next status poll
+  would highlight "Automatic" again, while the percent input and test
+  buttons stayed visible regardless (the button and the rows were driven by
+  separate state that could drift apart). Both are now derived from the
+  same value, so they can no longer disagree; a genuine override committed
+  elsewhere (e.g. Emergency) still correctly overrides an open-but-never-
+  confirmed Manual view.
 
 ## 4.1.0
 
-### Neu und verbessert
+### Added and Improved
 
-- Jeder Sidebar-Punkt (Status, Steuerung, Verlauf, Ereignisse, Konfiguration)
-  ist jetzt eine eigene Seite: nur der ausgewählte Bereich ist sichtbar,
-  statt alle fünf untereinander durchzuscrollen. Navigation läuft über den
-  URL-Hash, Browser-Vor/Zurück funktioniert
-- Die Ereignisliste zeigt nur noch 10 Einträge gleichzeitig, mit
-  Vorherige/Nächste-Pfeilen und Seitenanzeige darunter (ähnlich der
-  Log-Ansicht in Portainer); ein Filter setzt die Seite zurück auf 1
+- Every sidebar entry (Status, Control, History, Events, Configuration) is
+  now its own page: only the selected section is visible, instead of
+  scrolling through all five stacked on top of each other. Navigation runs
+  through the URL hash, browser back/forward works
+- The event list now shows only 10 entries at a time, with previous/next
+  arrows and a page indicator below (similar to the log view in Portainer);
+  a filter resets the page back to 1
 
 ## 4.0.2
 
-### Behoben
+### Fixed
 
-- Der Chart-Tooltip erschien im gesamten Diagramm, auch tief im
-  Verlaufs-Füllbereich unterhalb der Linie; er zeigt sich jetzt nur noch,
-  wenn der Mauszeiger nah an der Linie selbst ist
-- "Modus & Test" zeigte Prozent-Eingabe und Testknöpfe immer an; sie
-  erscheinen jetzt nur noch, wenn "Manuell" ausgewählt ist (bei Automatik
-  und Notfall bleiben sie ausgeblendet)
+- The chart tooltip appeared anywhere in the chart, even deep in the filled
+  area below the line; it now only shows when the cursor is close to the
+  line itself
+- "Mode & Test" always showed the percent input and test buttons; they now
+  only appear when "Manual" is selected (they stay hidden for Automatic and
+  Emergency)
 
 ## 4.0.1
 
-### Behoben
+### Fixed
 
-- Der Flash-Boot-Stick wurde auf einem realen System trotz `IsHDD()`-Filter
-  weiter als HDD gezählt, weil seine `disks.ini`-Sektion kein `type="FLASH"`
-  hatte. Der Ausschluss prüft jetzt zusätzlich den Sektionsnamen (`flash`,
-  `cache*`), unabhängig vom `type=`-Feld
-- Die Festplatten-Kachel zeigte die Laufwerke in `disks.ini`-Schreibreihen-
-  folge statt sortiert; `disk1..diskN` und `parity`/`parity2` erscheinen jetzt
-  in natürlicher Reihenfolge
+- The flash boot stick was still counted as an HDD on a real system despite
+  the `IsHDD()` filter, because its `disks.ini` section had no
+  `type="FLASH"`. The exclusion now also checks the section name (`flash`,
+  `cache*`), independent of the `type=` field
+- The hard drive tile showed drives in `disks.ini` write order instead of
+  sorted; `disk1..diskN` and `parity`/`parity2` now appear in natural order
 
 ## 4.0.0
 
 ### Breaking
 
-- `API_TOKEN` entfällt vollständig, ersetzt durch einen Login
-  (`ADMIN_USER`/`ADMIN_PASSWORD`). **Vor dem Update:** `ADMIN_PASSWORD` in
-  der Stack-Umgebung setzen, sonst ist das Dashboard nach dem Update offen
-  erreichbar (Login ist ohne gesetztes Passwort bewusst deaktiviert, damit
-  ein frischer Deploy nicht aussperrt). `scripts/fanctl` loggt sich jetzt
-  automatisch mit denselben Variablen ein, ein alter `API_TOKEN`-Eintrag in
-  der Stack-Konfiguration wird ignoriert
+- `API_TOKEN` is removed entirely, replaced by a login
+  (`ADMIN_USER`/`ADMIN_PASSWORD`). **Before updating:** set `ADMIN_PASSWORD`
+  in the stack environment, otherwise the dashboard is openly reachable
+  after the update (login is deliberately disabled without a password set,
+  so a fresh deploy does not lock you out). `scripts/fanctl` now logs in
+  automatically with the same variables; an old `API_TOKEN` entry in the
+  stack configuration is ignored
 
-### Neu und verbessert
+### Added and Improved
 
-- Login-Maske schützt das gesamte Dashboard (Session-Cookie, 24h gleitend,
-  bcrypt-Hash des Passworts, striktes Rate-Limit gegen Brute-Force);
-  `GET /api/health` bleibt für Docker-Healthcheck und externes Monitoring
-  ohne Login erreichbar
-- Neue Kachel je HDD-Temperatur; Cache-/Flash-Geräte in `disks.ini` zählen
-  nicht mehr zu `disks_reporting`/`maximum_disk_temperature` (konnten bisher
-  eine SSD/NVMe-Cache-Temperatur in die Lüfterkurve einrechnen)
-- Hell/Dunkel-Umschalter oben im Header (Standard: dunkel)
-- Automatik/Manuell/Notfall sind jetzt eine einzige, den aktuellen Modus
-  hervorhebende Leiste statt über Header-Buttons und ein separates
-  Eingabefeld verteilt
-- Verlaufs-Charts zeigen beim Hover den exakten Wert und Zeitpunkt
-- Bestätigungsmeldungen nach einer Aktion sind lesbar formuliert und blenden
-  sich nach 4 Sekunden automatisch aus, statt dauerhaft als Roh-JSON stehen
-  zu bleiben
-- "Grund" ist jetzt Teil der Controller-Statuskarte statt einer isoliert
-  wirkenden eigenen Kachel
-- README vollständig auf Englisch, inklusive aller Funktionen seit 3.1.0
+- A login screen protects the whole dashboard (session cookie, 24h sliding,
+  bcrypt-hashed password, strict rate limit against brute force);
+  `GET /api/health` stays reachable without login for the Docker
+  healthcheck and external monitoring
+- New tile for each HDD's temperature; cache/flash devices in `disks.ini`
+  no longer count toward `disks_reporting`/`maximum_disk_temperature`
+  (previously they could factor an SSD/NVMe cache temperature into the fan
+  curve)
+- Light/dark toggle at the top of the header (default: dark)
+- Automatic/Manual/Emergency are now a single bar highlighting the current
+  mode, instead of being split across header buttons and a separate input
+  field
+- History charts show the exact value and time on hover
+- Confirmation messages after an action are worded readably and
+  automatically fade out after 4 seconds, instead of sitting on screen as
+  raw JSON forever
+- "Reason" is now part of the controller status card instead of its own,
+  visually isolated tile
+- README fully rewritten in English, including every feature added since
+  3.1.0
 
 ## 3.2.0
 
-### Behoben
+### Fixed
 
-- `setOverride` schrieb den internen Zustand, bevor `override.json`
-  gespeichert war; schlug das Speichern fehl, blieb der Override trotzdem
-  aktiv. Persistenz läuft jetzt zuerst, `setOverride` gibt einen Fehler
-  zurück, die betroffenen Endpunkte antworten mit HTTP 500
-- Derselbe Fehler betraf `handleConfigUpdate` und `handleProfile`
-  (Speicher-Update vor Persistenz mit Revert-Versuch bei Fehlschlag);
-  beide persistieren jetzt zuerst
-- Ein manueller Lüftertest konnte die Drehzahl unter das aktuelle
-  Notfall-, Failsafe- oder Array-Boost-Minimum schreiben; unsichere
-  Testwerte werden jetzt mit HTTP 409 abgelehnt
-- Persistenzfehler von `AppendHistory`/`AppendEvent` wurden verschluckt;
-  sie werden jetzt geloggt und fließen in `/api/health` ein
+- `setOverride` wrote the in-memory state before `override.json` was saved;
+  if saving failed, the override stayed active anyway. Persistence now runs
+  first, `setOverride` returns an error, and the affected endpoints respond
+  with HTTP 500
+- The same bug affected `handleConfigUpdate` and `handleProfile` (memory
+  update before persistence with a revert attempt on failure); both now
+  persist first
+- A manual fan test could write a speed below the current emergency,
+  failsafe, or array-boost minimum; unsafe test values are now rejected
+  with HTTP 409
+- Persistence errors from `AppendHistory`/`AppendEvent` were swallowed; they
+  are now logged and reflected in `/api/health`
 
-### Sicherheit
+### Security
 
-- Konfiguration und Override aus `config.json`/`override.json` werden mit
-  `DisallowUnknownFields` und einer EOF-Prüfung geladen, unbekannte Felder
-  oder Daten nach dem JSON-Objekt werden abgelehnt (gilt auch für
-  `POST /api/config`)
-- Schreibende Endpunkte sind pro Kategorie (Override, Profil, Konfiguration,
-  Test) auf einen Schreibvorgang pro Sekunde begrenzt; ein Lüftertest lässt
-  zusätzlich nur einen aktiven Test gleichzeitig zu und hat einen eigenen
-  5-Sekunden-Cooldown
-- Profil-, Konfigurations- und Override-Änderungen sind über einen
-  eigenen Mutex serialisiert, sodass sich nebenläufige Anfragen nicht mehr
-  gegenseitig überschreiben können
+- Configuration and override loaded from `config.json`/`override.json` use
+  `DisallowUnknownFields` and an EOF check; unknown fields or data after the
+  JSON object are rejected (also applies to `POST /api/config`)
+- Write endpoints are limited per category (override, profile, config,
+  test) to one write per second; a fan test additionally allows only one
+  active test at a time and has its own 5-second cooldown
+- Profile, configuration, and override changes are serialized through a
+  dedicated mutex, so concurrent requests can no longer overwrite each
+  other
 
-### Neu und verbessert
+### Added and Improved
 
-- `/api/status` liefert `target_percent`, `last_applied_percent` und
-  `feedback_available` getrennt von `fan_percent` (bleibt als Alias
-  erhalten); das Dashboard zeigt jetzt Soll- und Ist-Wert getrennt und weist
-  darauf hin, dass der Controller keine RPM-Rückmeldung liefert
-  (`last_applied_percent` ändert sich nur bei einem tatsächlich
-  erfolgreichen I²C-Schreibvorgang)
-  - `/api/health` liefert zusätzlich `status`, `controller`, `config` und
-  `storage` als einzelne Prüfungen statt nur eines Gesamt-`healthy`
-- `REAPPLY_INTERVAL_SECONDS` (Default 300) schreibt die aktive PWM
-  regelmäßig erneut, auch ohne Wertänderung, und zusätzlich sofort nach
-  einer erfolgreichen Controller-Neuerkennung; nach einem fehlgeschlagenen
-  Schreibversuch wird bereits nach 10 statt nach 300 Sekunden erneut
-  versucht
-- `config.json` trägt jetzt `config_version`; fehlt das Feld (ältere
-  Installationen), wird stillschweigend Version 1 angenommen, eine höhere
-  Version als von diesem Binary unterstützt wird abgelehnt
-- CI: `golangci-lint` ist auf `v1.64.2` gepinnt statt `latest`,
-  `go mod tidy` samt `git diff --exit-code` hält `go.mod`/`go.sum`
-  konsistent, `docker compose config` prüft die Compose-Datei
-- `docker-compose.yml` setzt `stop_grace_period: 20s`, damit die
-  Abschaltdrehzahl vor einem `SIGKILL` sicher geschrieben werden kann
+- `/api/status` returns `target_percent`, `last_applied_percent`, and
+  `feedback_available` separately from `fan_percent` (kept as an alias);
+  the dashboard now shows target and actual values separately and notes
+  that the controller provides no RPM feedback (`last_applied_percent`
+  only changes on an actually successful I²C write)
+  - `/api/health` additionally returns `status`, `controller`, `config`,
+  and `storage` as individual checks instead of just an overall `healthy`
+- `REAPPLY_INTERVAL_SECONDS` (default 300) periodically rewrites the active
+  PWM even without a value change, and additionally immediately after a
+  successful controller rediscovery; after a failed write it retries after
+  10 seconds instead of waiting the full 300
+- `config.json` now carries `config_version`; if the field is missing
+  (older installations), version 1 is silently assumed, and a version
+  higher than this binary supports is rejected
+- CI: `golangci-lint` is pinned to `v1.64.2` instead of `latest`,
+  `go mod tidy` plus `git diff --exit-code` keeps `go.mod`/`go.sum`
+  consistent, `docker compose config` validates the compose file
+- `docker-compose.yml` sets `stop_grace_period: 20s`, so the shutdown speed
+  can be safely written before a `SIGKILL`
 
 ## 3.1.1
 
-### Behoben
+### Fixed
 
-- Ein per Portainer-Git-Stack lokal gebautes Image zeigte im Dashboard und in
-  `/api/health` immer `vdev` statt der echten Versionsnummer, weil
-  `docker-compose.yml` den `VERSION`-Build-Arg ohne gesetzte Umgebungsvariable
-  fest auf `dev` setzte. Eine `VERSION`-Datei im Repo-Root ist jetzt die
-  Quelle der Wahrheit; das Dockerfile liest sie automatisch, sofern kein
-  `VERSION`-Arg übergeben wird (CI setzt ihn weiterhin aus dem Git-Tag)
+- An image built locally via a Portainer git stack always showed `vdev` in
+  the dashboard and in `/api/health` instead of the real version number,
+  because `docker-compose.yml` hard-set the `VERSION` build arg to `dev`
+  without an environment variable set. A `VERSION` file in the repo root is
+  now the source of truth; the Dockerfile reads it automatically unless a
+  `VERSION` arg is passed (CI still sets it from the git tag)
 
 ## 3.1.0
 
-### Behoben
+### Fixed
 
-- `internal/app` importierte `os` ohne Verwendung, das Projekt ließ sich nicht
-  übersetzen
-- `I2C_RETRIES=0` meldete Schreiberfolg, ohne jemals `i2cset` aufzurufen
-- `CHECK_INTERVAL_SECONDS=0` führte zu einem Panic in `time.NewTicker`
-- Eine fehlende oder unlesbare `disks.ini` wurde als 0 °C gewertet und senkte
-  die Lüfter auf die unterste Kurvenstufe; jetzt greift eine Sicherheitsdrehzahl
-- `config.json` wurde in die Standardprofile hineingelesen, gelöschte Profile
-  kamen nach einem Neustart zurück
-- Kurven aus `config.json` und der REST-API wurden weder validiert noch
-  sortiert, obwohl die Auswertung sortierte Punkte voraussetzt
-- `fanctl` zerlegte den Token-Header am Leerzeichen, der Token kam nie an
-- Ereignisliste im Dashboard wurde per `innerHTML` erzeugt (Stored XSS über
-  Werte aus `var.ini` und Profilnamen)
-- Ein unlesbarer Array-Status löst keinen Dauerboost mehr aus
-- `recon P` von Unraid wird als Rebuild erkannt
-- Die Hysterese hält keine Boost- oder Notfalldrehzahl mehr fest
-- Nach einem Lüftertest stellt der Regelkreis den berechneten Wert wieder her
-- `GET /` war ein Catch-all und lieferte für jeden Pfad HTML
+- `internal/app` imported `os` without using it, the project failed to
+  compile
+- `I2C_RETRIES=0` reported a successful write without ever calling `i2cset`
+- `CHECK_INTERVAL_SECONDS=0` caused a panic in `time.NewTicker`
+- A missing or unreadable `disks.ini` was treated as 0 °C and dropped the
+  fans to the lowest curve step; a safety speed now applies instead
+- `config.json` was decoded into the default profiles, so deleted profiles
+  reappeared after a restart
+- Curves from `config.json` and the REST API were neither validated nor
+  sorted, even though evaluation assumes sorted points
+- `fanctl` split the token header on whitespace, so the token never arrived
+- The dashboard's event list was built via `innerHTML` (stored XSS via
+  values from `var.ini` and profile names)
+- An unreadable array status no longer triggers a permanent boost
+- Unraid's `recon P` is now recognized as a rebuild
+- Hysteresis no longer holds a boost or emergency speed in place
+- After a fan test, the control loop restores the computed value again
+- `GET /` was a catch-all and served HTML for every path
 
-### Sicherheit
+### Security
 
-- Token-Vergleich läuft in konstanter Zeit
-- Schreibendpunkte prüfen Origin und `Sec-Fetch-Site` gegen Cross-Site-Anfragen
-- Content-Security-Policy ohne `unsafe-inline`, CSS und JavaScript liegen auf
-  eigenen Routen
+- Token comparison runs in constant time
+- Write endpoints check Origin and `Sec-Fetch-Site` against cross-site
+  requests
+- Content-Security-Policy without `unsafe-inline`, CSS and JavaScript are
+  served from their own routes
 
-### Neu und verbessert
+### Added and Improved
 
-- `history.jsonl` und `events.jsonl` rotieren (`MAX_LOG_LINES`), Lesezugriffe
-  laufen über einen Ring-Buffer statt die Datei komplett zu laden
-- `SAFE_SHUTDOWN_PERCENT` setzt beim Beenden eine definierte Drehzahl
-- Der HTTP-Server startet vor der Controller-Suche, das Dashboard zeigt jetzt,
-  warum kein Controller gefunden wird
-- `i2cdetect` läuft nur noch beim Start, nach Schreibfehlern und alle
-  `DETECT_INTERVAL_SECONDS`, nicht mehr in jedem Zyklus
-- Retries verwenden einen Context-fähigen Backoff, Shutdown verzögert sich nicht
-- Adresserkennung wertet das `i2cdetect`-Raster spaltenweise aus
-- Atomare Konfigurationsschreibvorgänge mit `fsync`
-- Unit-Tests für Kurve, Entscheidungslogik, INI-Parsing, Store und HTTP-Schicht
-- `docker-compose.yml` bindet `/var/local/emhttp` als Verzeichnis ein und nimmt
-  Port, Bind-Adresse und Busnummer aus Variablen
+- `history.jsonl` and `events.jsonl` rotate (`MAX_LOG_LINES`), reads go
+  through a ring buffer instead of loading the whole file
+- `SAFE_SHUTDOWN_PERCENT` sets a defined speed on shutdown
+- The HTTP server starts before the controller search, the dashboard now
+  shows why no controller was found
+- `i2cdetect` now only runs on startup, after write failures, and every
+  `DETECT_INTERVAL_SECONDS`, no longer every cycle
+- Retries use a context-aware backoff, shutdown is not delayed
+- Address detection parses the `i2cdetect` grid column by column
+- Atomic configuration writes with `fsync`
+- Unit tests for the curve, decision logic, INI parsing, store, and HTTP
+  layer
+- `docker-compose.yml` mounts `/var/local/emhttp` as a directory and takes
+  the port, bind address, and bus number from variables
 
 ## 3.0.0
 
-- Web-Dashboard, Verlauf, Ereignisse, Profile, REST-API, Docker-Härtung
+- Web dashboard, history, events, profiles, REST API, Docker hardening

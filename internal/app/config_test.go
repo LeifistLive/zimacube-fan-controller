@@ -10,12 +10,12 @@ import (
 
 func TestDefaultRuntimeConfigIsValid(t *testing.T) {
 	if _, err := normalizeRuntimeConfig(defaultRuntimeConfig()); err != nil {
-		t.Fatalf("Standardkonfiguration ist ungültig: %v", err)
+		t.Fatalf("default config is invalid: %v", err)
 	}
 }
 
-// Regression: Kurven aus JSON wurden nicht geprüft und nicht sortiert, obwohl
-// Speed und ThresholdForSpeed sortierte Punkte erwarten.
+// Regression: curves from JSON were not validated or sorted, even though
+// Speed and ThresholdForSpeed expect sorted points.
 func TestNormalizeSortsCurvesFromJSON(t *testing.T) {
 	input := RuntimeConfig{
 		ActiveProfile: "custom",
@@ -35,24 +35,24 @@ func TestNormalizeSortsCurvesFromJSON(t *testing.T) {
 
 	normalized, err := normalizeRuntimeConfig(input)
 	if err != nil {
-		t.Fatalf("unerwarteter Fehler: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
 	profile := normalized.Profiles["custom"]
 	if profile.Curve[0].Temperature != 0 {
-		t.Fatalf("Kurve nicht sortiert: %s", profile.Curve)
+		t.Fatalf("curve not sorted: %s", profile.Curve)
 	}
 	if got := profile.Curve.Speed(10); got != 60 {
-		t.Fatalf("Speed(10) = %d, erwartet 60", got)
+		t.Fatalf("Speed(10) = %d, expected 60", got)
 	}
 	if profile.Name != "custom" {
-		t.Fatalf("leerer Anzeigename wurde nicht ersetzt: %q", profile.Name)
+		t.Fatalf("empty display name was not replaced: %q", profile.Name)
 	}
 }
 
 func TestNormalizeRejectsBrokenProfiles(t *testing.T) {
 	good, err := controller.ParseCurve("0:60,48:100")
 	if err != nil {
-		t.Fatalf("Kurve: %v", err)
+		t.Fatalf("curve: %v", err)
 	}
 	base := Profile{
 		Curve:                good,
@@ -70,23 +70,23 @@ func TestNormalizeRejectsBrokenProfiles(t *testing.T) {
 	}
 
 	cases := map[string]RuntimeConfig{
-		"leere Profilliste": {ActiveProfile: "p", Profiles: map[string]Profile{}},
-		"aktives Profil fehlt": {
-			ActiveProfile: "weg",
+		"empty profile list": {ActiveProfile: "p", Profiles: map[string]Profile{}},
+		"active profile missing": {
+			ActiveProfile: "gone",
 			Profiles:      map[string]Profile{"p": base},
 		},
-		"leerer Profilname": {
+		"empty profile name": {
 			ActiveProfile: "p",
 			Profiles:      map[string]Profile{"": base},
 		},
-		"leere Kurve":               withProfile(func(p *Profile) { p.Curve = nil }),
-		"Kurvenprozent ungültig":    withProfile(func(p *Profile) { p.Curve[0].Percent = 0 }),
-		"Boost ungültig":            withProfile(func(p *Profile) { p.ArrayBoostPercent = 0 }),
-		"Notfallprozent ungültig":   withProfile(func(p *Profile) { p.EmergencyPercent = 120 }),
-		"Notfalltemperatur zu tief": withProfile(func(p *Profile) { p.EmergencyTemperature = 5 }),
-		"Hysterese negativ":         withProfile(func(p *Profile) { p.HysteresisC = -1 }),
-		"Anzeigename zu lang":       withProfile(func(p *Profile) { p.Name = strings.Repeat("x", maxProfileNameLength+1) }),
-		"Profilname (Key) zu lang": {
+		"empty curve":                   withProfile(func(p *Profile) { p.Curve = nil }),
+		"invalid curve percent":         withProfile(func(p *Profile) { p.Curve[0].Percent = 0 }),
+		"invalid boost":                 withProfile(func(p *Profile) { p.ArrayBoostPercent = 0 }),
+		"invalid emergency percent":     withProfile(func(p *Profile) { p.EmergencyPercent = 120 }),
+		"emergency temperature too low": withProfile(func(p *Profile) { p.EmergencyTemperature = 5 }),
+		"negative hysteresis":           withProfile(func(p *Profile) { p.HysteresisC = -1 }),
+		"display name too long":         withProfile(func(p *Profile) { p.Name = strings.Repeat("x", maxProfileNameLength+1) }),
+		"profile name (key) too long": {
 			ActiveProfile: strings.Repeat("k", maxProfileNameLength+1),
 			Profiles:      map[string]Profile{strings.Repeat("k", maxProfileNameLength+1): base},
 		},
@@ -94,13 +94,13 @@ func TestNormalizeRejectsBrokenProfiles(t *testing.T) {
 
 	for name, config := range cases {
 		if _, err := normalizeRuntimeConfig(config); err == nil {
-			t.Errorf("%s: erwarte Fehler", name)
+			t.Errorf("%s: expected error", name)
 		}
 	}
 }
 
-// Regression: die Konfiguration wurde in die Defaults hineingelesen, gelöschte
-// Profile tauchten nach einem Neustart wieder auf.
+// Regression: the config was merged into the defaults, so deleted
+// profiles reappeared after a restart.
 func TestLoadRuntimeConfigDoesNotMergeDefaults(t *testing.T) {
 	st := store.New(t.TempDir(), 0)
 	if err := st.Ensure(); err != nil {
@@ -109,13 +109,13 @@ func TestLoadRuntimeConfigDoesNotMergeDefaults(t *testing.T) {
 
 	curve, err := controller.ParseCurve("0:50,50:100")
 	if err != nil {
-		t.Fatalf("Kurve: %v", err)
+		t.Fatalf("curve: %v", err)
 	}
 	saved := RuntimeConfig{
-		ActiveProfile: "nur-eins",
+		ActiveProfile: "only-one",
 		Profiles: map[string]Profile{
-			"nur-eins": {
-				Name:                 "Nur eins",
+			"only-one": {
+				Name:                 "Only one",
 				Curve:                curve,
 				ArrayBoostPercent:    80,
 				EmergencyTemperature: 55,
@@ -133,10 +133,10 @@ func TestLoadRuntimeConfigDoesNotMergeDefaults(t *testing.T) {
 		t.Fatalf("loadRuntimeConfig: %v", err)
 	}
 	if len(loaded.Profiles) != 1 {
-		t.Fatalf("erwarte genau ein Profil, habe %d: %v", len(loaded.Profiles), loaded.Profiles)
+		t.Fatalf("expected exactly one profile, have %d: %v", len(loaded.Profiles), loaded.Profiles)
 	}
 	if _, ok := loaded.Profiles["balanced"]; ok {
-		t.Fatal("gelöschtes Standardprofil ist zurückgekehrt")
+		t.Fatal("deleted default profile came back")
 	}
 }
 
@@ -156,17 +156,17 @@ func TestLoadRuntimeConfigRejectsBrokenFile(t *testing.T) {
 		t.Fatalf("SaveJSON: %v", err)
 	}
 	if _, err := loadRuntimeConfig(st); err == nil {
-		t.Fatal("Profil ohne Kurve muss abgelehnt werden")
+		t.Fatal("a profile without a curve must be rejected")
 	}
 }
 
-// Regression: config.json geschrieben vor Einführung von config_version darf
-// nach einem Update weiterhin geladen werden, ohne dass ein Nutzer manuell
-// eingreifen muss.
+// Regression: a config.json written before config_version was introduced
+// must still load after an update, without requiring a user to intervene
+// manually.
 func TestNormalizeMigratesMissingConfigVersion(t *testing.T) {
 	input := RuntimeConfig{
-		// ConfigVersion absichtlich nicht gesetzt (Zero-Value, wie eine
-		// config.json von vor dieser Änderung).
+		// ConfigVersion intentionally not set (zero value, like a
+		// config.json from before this change).
 		ActiveProfile: "p",
 		Profiles: map[string]Profile{
 			"p": {
@@ -179,10 +179,10 @@ func TestNormalizeMigratesMissingConfigVersion(t *testing.T) {
 	}
 	normalized, err := normalizeRuntimeConfig(input)
 	if err != nil {
-		t.Fatalf("unerwarteter Fehler: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
 	if normalized.ConfigVersion != currentConfigVersion {
-		t.Fatalf("ConfigVersion = %d, erwarte %d", normalized.ConfigVersion, currentConfigVersion)
+		t.Fatalf("ConfigVersion = %d, expected %d", normalized.ConfigVersion, currentConfigVersion)
 	}
 }
 
@@ -200,7 +200,7 @@ func TestNormalizeRejectsFutureConfigVersion(t *testing.T) {
 		},
 	}
 	if _, err := normalizeRuntimeConfig(input); err == nil {
-		t.Fatal("eine neuere config_version als unterstützt muss abgelehnt werden")
+		t.Fatal("a config_version newer than supported must be rejected")
 	}
 }
 
@@ -208,7 +208,7 @@ func mustCurve(t *testing.T, raw string) controller.Curve {
 	t.Helper()
 	curve, err := controller.ParseCurve(raw)
 	if err != nil {
-		t.Fatalf("Kurve: %v", err)
+		t.Fatalf("curve: %v", err)
 	}
 	return curve
 }
@@ -242,6 +242,6 @@ func TestSanitizedClampsConfig(t *testing.T) {
 		t.Errorf("SafeShutdownPercent = %d", cfg.SafeShutdownPercent)
 	}
 	if cfg.DataDir == "" || cfg.ListenAddress == "" || cfg.DetectInterval <= 0 || cfg.ReapplyInterval <= 0 {
-		t.Errorf("Standardwerte fehlen: %+v", cfg)
+		t.Errorf("default values missing: %+v", cfg)
 	}
 }

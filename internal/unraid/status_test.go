@@ -10,7 +10,7 @@ func write(t *testing.T, name, content string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), name)
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
-		t.Fatalf("Datei %s: %v", name, err)
+		t.Fatalf("file %s: %v", name, err)
 	}
 	return path
 }
@@ -29,16 +29,16 @@ temp="41"
 
 	result, err := ReadDiskTemperatures(path)
 	if err != nil {
-		t.Fatalf("unerwarteter Fehler: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
 	if result.Maximum != 41 {
-		t.Errorf("Maximum = %d, erwartet 41", result.Maximum)
+		t.Errorf("Maximum = %d, expected 41", result.Maximum)
 	}
 	if result.Reporting != 3 {
-		t.Errorf("Reporting = %d, erwartet 3", result.Reporting)
+		t.Errorf("Reporting = %d, expected 3", result.Reporting)
 	}
 	if result.Parsed != 2 {
-		t.Errorf("Parsed = %d, erwartet 2", result.Parsed)
+		t.Errorf("Parsed = %d, expected 2", result.Parsed)
 	}
 }
 
@@ -51,18 +51,18 @@ temp="*"
 
 	result, err := ReadDiskTemperatures(path)
 	if err != nil {
-		t.Fatalf("Standby ist kein Fehler: %v", err)
+		t.Fatalf("standby is not an error: %v", err)
 	}
 	if result.Maximum != 0 || result.Parsed != 0 || result.Reporting != 2 {
-		t.Fatalf("unerwartetes Ergebnis: %+v", result)
+		t.Fatalf("unexpected result: %+v", result)
 	}
 	if len(result.Disks) != 2 || result.Disks[0].Valid || result.Disks[1].Valid {
-		t.Fatalf("Standby-Laufwerke sollten in Disks stehen, aber ungueltig sein: %+v", result.Disks)
+		t.Fatalf("standby drives should be present in Disks but marked invalid: %+v", result.Disks)
 	}
 }
 
-// Regression: eine Cache-/NVMe-SSD in disks.ini wurde bisher als HDD
-// mitgezaehlt und konnte damit die Zieltemperatur der Luefterkurve verfaelschen.
+// Regression: a cache/NVMe SSD in disks.ini used to be counted as an HDD
+// and could skew the fan curve's target temperature.
 func TestReadDiskTemperaturesExcludesCache(t *testing.T) {
 	path := write(t, "disks.ini", `["disk1"]
 name="disk1"
@@ -80,22 +80,23 @@ temp="30"
 
 	result, err := ReadDiskTemperatures(path)
 	if err != nil {
-		t.Fatalf("unerwarteter Fehler: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
 	if result.Maximum != 35 {
-		t.Fatalf("Maximum = %d, erwartet 35 (Cache-SSD mit 55 Grad muss ausgeschlossen sein)", result.Maximum)
+		t.Fatalf("Maximum = %d, expected 35 (cache SSD at 55 degrees must be excluded)", result.Maximum)
 	}
 	if result.Reporting != 1 || result.Parsed != 1 {
-		t.Fatalf("Reporting/Parsed = %d/%d, erwartet 1/1", result.Reporting, result.Parsed)
+		t.Fatalf("Reporting/Parsed = %d/%d, expected 1/1", result.Reporting, result.Parsed)
 	}
 	if len(result.Disks) != 1 || result.Disks[0].Name != "disk1" {
-		t.Fatalf("Disks sollte nur disk1 enthalten: %+v", result.Disks)
+		t.Fatalf("Disks should contain only disk1: %+v", result.Disks)
 	}
 }
 
-// Regression: Auf einem echten System hatte der Flash-Boot-Stick kein
-// type="FLASH"-Feld, wurde also trotz des Typ-Filters noch als HDD gezaehlt.
-// Der Sektionsname "flash" (Unraids eigene Konvention) muss allein reichen.
+// Regression: on a real system the flash boot stick had no
+// type="FLASH" field, so it was still counted as an HDD despite the type
+// filter. The section name "flash" (Unraid's own convention) alone must
+// be enough.
 func TestReadDiskTemperaturesExcludesFlashByNameWithoutTypeField(t *testing.T) {
 	path := write(t, "disks.ini", `["disk1"]
 name="disk1"
@@ -108,18 +109,18 @@ temp="42"
 
 	result, err := ReadDiskTemperatures(path)
 	if err != nil {
-		t.Fatalf("unerwarteter Fehler: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
 	if result.Maximum != 35 {
-		t.Fatalf("Maximum = %d, erwartet 35 (Flash-Stick ohne type= muss trotzdem ausgeschlossen sein)", result.Maximum)
+		t.Fatalf("Maximum = %d, expected 35 (flash stick without type= must still be excluded)", result.Maximum)
 	}
 	if len(result.Disks) != 1 || result.Disks[0].Name != "disk1" {
-		t.Fatalf("Disks sollte nur disk1 enthalten: %+v", result.Disks)
+		t.Fatalf("Disks should contain only disk1: %+v", result.Disks)
 	}
 }
 
-// Regression: disks.ini listet Sektionen in Schreibreihenfolge von emhttp,
-// nicht in einer fuer den Nutzer sinnvollen Reihenfolge.
+// Regression: disks.ini lists sections in emhttp's write order, not in
+// an order that makes sense to the user.
 func TestReadDiskTemperaturesSortsNaturally(t *testing.T) {
 	path := write(t, "disks.ini", `["parity2"]
 name="parity2"
@@ -145,7 +146,7 @@ temp="34"
 
 	result, err := ReadDiskTemperatures(path)
 	if err != nil {
-		t.Fatalf("unerwarteter Fehler: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
 
 	var names []string
@@ -154,17 +155,18 @@ temp="34"
 	}
 	expected := []string{"disk1", "disk2", "disk10", "parity", "parity2"}
 	if len(names) != len(expected) {
-		t.Fatalf("Namen = %v, erwartet %v", names, expected)
+		t.Fatalf("names = %v, expected %v", names, expected)
 	}
 	for i := range expected {
 		if names[i] != expected[i] {
-			t.Fatalf("Namen = %v, erwartet %v", names, expected)
+			t.Fatalf("names = %v, expected %v", names, expected)
 		}
 	}
 }
 
-// Fehlt das type=-Feld ganz (aeltere Unraid-Versionen), muss das Laufwerk wie
-// bisher mitgezaehlt werden, statt durch den neuen Filter zu verschwinden.
+// If the type= field is missing entirely (older Unraid versions), the
+// drive must still be counted as before, instead of disappearing due to
+// the new filter.
 func TestReadDiskTemperaturesCountsDisksWithoutTypeField(t *testing.T) {
 	path := write(t, "disks.ini", `["disk1"]
 name="disk1"
@@ -173,25 +175,25 @@ temp="35"
 
 	result, err := ReadDiskTemperatures(path)
 	if err != nil {
-		t.Fatalf("unerwarteter Fehler: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
 	if result.Reporting != 1 || result.Maximum != 35 {
-		t.Fatalf("unerwartetes Ergebnis: %+v", result)
+		t.Fatalf("unexpected result: %+v", result)
 	}
 }
 
-// Regression: eine fehlende oder unbrauchbare disks.ini lieferte früher 0 Grad
-// und damit die niedrigste Kurvenstufe.
+// Regression: a missing or unusable disks.ini used to return 0 degrees
+// and thus the lowest curve step.
 func TestReadDiskTemperaturesReportsProblems(t *testing.T) {
-	if _, err := ReadDiskTemperatures(filepath.Join(t.TempDir(), "fehlt.ini")); err == nil {
-		t.Error("fehlende Datei muss einen Fehler liefern")
+	if _, err := ReadDiskTemperatures(filepath.Join(t.TempDir(), "missing.ini")); err == nil {
+		t.Error("missing file must return an error")
 	}
 	path := write(t, "disks.ini", "name=\"disk1\"\nsize=\"100\"\n")
 	if _, err := ReadDiskTemperatures(path); err == nil {
-		t.Error("Datei ohne temp= muss einen Fehler liefern")
+		t.Error("file without temp= must return an error")
 	}
 	if _, err := ReadDiskTemperatures(write(t, "disks.ini", "")); err == nil {
-		t.Error("leere Datei muss einen Fehler liefern")
+		t.Error("empty file must return an error")
 	}
 }
 
@@ -208,29 +210,29 @@ func TestArrayOperation(t *testing.T) {
 		{"mdResync=\"1000\"\nmdResyncAction=\"resync\"\n", "parity-sync"},
 		{"mdResync=\"1000\"\nmdResyncAction=\"clear\"\n", "clear"},
 		{"mdResync=\"1000\"\n", "array-operation"},
-		{"# Kommentar\n[section]\nmdResync=\"1000\"\nmdResyncAction=\"seltsam\"\n", "seltsam"},
+		{"# comment\n[section]\nmdResync=\"1000\"\nmdResyncAction=\"weird\"\n", "weird"},
 	}
 
 	for _, testCase := range cases {
 		path := write(t, "var.ini", testCase.content)
 		operation, err := ArrayOperation(path)
 		if err != nil {
-			t.Errorf("%q: unerwarteter Fehler %v", testCase.content, err)
+			t.Errorf("%q: unexpected error %v", testCase.content, err)
 			continue
 		}
 		if operation != testCase.expected {
-			t.Errorf("%q: Operation = %q, erwartet %q", testCase.content, operation, testCase.expected)
+			t.Errorf("%q: Operation = %q, expected %q", testCase.content, operation, testCase.expected)
 		}
 	}
 }
 
 func TestArrayOperationUnknownOnMissingFile(t *testing.T) {
-	operation, err := ArrayOperation(filepath.Join(t.TempDir(), "fehlt.ini"))
+	operation, err := ArrayOperation(filepath.Join(t.TempDir(), "missing.ini"))
 	if err == nil {
-		t.Error("fehlende Datei muss einen Fehler liefern")
+		t.Error("missing file must return an error")
 	}
 	if operation != OperationUnknown {
-		t.Errorf("Operation = %q, erwartet %q", operation, OperationUnknown)
+		t.Errorf("Operation = %q, expected %q", operation, OperationUnknown)
 	}
 }
 
@@ -243,6 +245,6 @@ func TestSanitizeOperation(t *testing.T) {
 	}
 	long := sanitizeOperation("abcdefghijklmnopqrstuvwxyz0123456789abcdefghij")
 	if len(long) > 32 {
-		t.Errorf("Ausgabe zu lang: %d", len(long))
+		t.Errorf("output too long: %d", len(long))
 	}
 }

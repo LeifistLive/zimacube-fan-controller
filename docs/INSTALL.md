@@ -1,21 +1,21 @@
 # Installation
 
-1. I²C-Module in `/boot/config/go` eintragen (siehe README).
-2. Bus prüfen: `i2cdetect -l`, danach `I2C_BUS` passend setzen.
-3. Repository auf GitHub ablegen.
-4. In Portainer einen Git-Stack anlegen oder aktualisieren.
-5. Variablen aus `.env.example` als Stack-Umgebungsvariablen setzen,
-   mindestens `ADMIN_PASSWORD` (schützt das gesamte Dashboard per Login).
-6. **Re-pull image** deaktivieren, der Build läuft lokal.
-7. Stack deployen und `http://<unraid-ip>:8086/` öffnen.
+1. Add the I²C modules to `/boot/config/go` (see README).
+2. Check the bus: `i2cdetect -l`, then set `I2C_BUS` accordingly.
+3. Push the repository to GitHub.
+4. Create or update a git stack in Portainer.
+5. Set the variables from `.env.example` as stack environment variables,
+   at minimum `ADMIN_PASSWORD` (protects the whole dashboard via login).
+6. Disable **Re-pull image**, the build runs locally.
+7. Deploy the stack and open `http://<unraid-ip>:8086/`.
 
-## Nach dem Deployment prüfen
+## Checking After Deployment
 
 ```bash
 docker exec zimacube-fan-controller fanctl health
 docker logs zimacube-fan-controller | tail -20
 ```
 
-Zeigt das Dashboard `HDD-Temperatur nicht lesbar`, stimmt der Mount von
-`/var/local/emhttp` nicht. Zeigt es `I2C-Controller nicht erreichbar`, passen
-Busnummer oder Adresse nicht, oder die Kernelmodule fehlen.
+If the dashboard shows `HDD temperature unreadable`, the mount of
+`/var/local/emhttp` is wrong. If it shows `I2C controller unreachable`, the
+bus number or address is wrong, or the kernel modules are missing.

@@ -38,15 +38,15 @@ func main() {
 
 	service, err := app.New(cfg)
 	if err != nil {
-		log.Fatalf("[ERROR] Start fehlgeschlagen: %v", err)
+		log.Fatalf("[ERROR] startup failed: %v", err)
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	log.Printf("[INFO] ZimaCube Fan Controller v%s startet", app.Version)
-	log.Printf("[INFO] I²C Bus %d, Adresse %s", cfg.I2CBus, cfg.I2CAddress)
-	log.Printf("[INFO] Web/API auf %s", cfg.ListenAddress)
+	log.Printf("[INFO] ZimaCube Fan Controller v%s starting", app.Version)
+	log.Printf("[INFO] I²C bus %d, address %s", cfg.I2CBus, cfg.I2CAddress)
+	log.Printf("[INFO] web/API on %s", cfg.ListenAddress)
 
 	server := &http.Server{
 		Addr:              cfg.ListenAddress,
@@ -68,20 +68,20 @@ func main() {
 	// the Docker healthcheck are reachable even when I²C is not.
 	go func() {
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Printf("[ERROR] HTTP-Server: %v", err)
+			log.Printf("[ERROR] HTTP server: %v", err)
 			cancel()
 		}
 	}()
 
 	if err := service.AwaitController(ctx, 60*time.Second); err != nil {
-		log.Printf("[WARN] I²C-Controller nicht gefunden (%v), Dienst läuft weiter und versucht es erneut", err)
+		log.Printf("[WARN] I²C controller not found (%v), service continues and will keep retrying", err)
 	} else {
-		log.Printf("[OK] I²C-Controller gefunden")
+		log.Printf("[OK] I²C controller found")
 	}
 
 	service.Run(ctx)
 	service.ApplySafeState(cfg.SafeShutdownPercent)
-	log.Printf("[INFO] Container wird beendet")
+	log.Printf("[INFO] container shutting down")
 }
 
 func env(name, fallback string) string {
@@ -100,15 +100,15 @@ func envInt(name string, fallback, minimum, maximum int) int {
 	}
 	number, err := strconv.Atoi(raw)
 	if err != nil {
-		log.Printf("[WARN] %s=%q ist keine Zahl, verwende %d", name, raw, fallback)
+		log.Printf("[WARN] %s=%q is not a number, using %d", name, raw, fallback)
 		return fallback
 	}
 	if number < minimum {
-		log.Printf("[WARN] %s=%d ist kleiner als %d, verwende %d", name, number, minimum, minimum)
+		log.Printf("[WARN] %s=%d is less than %d, using %d", name, number, minimum, minimum)
 		return minimum
 	}
 	if number > maximum {
-		log.Printf("[WARN] %s=%d ist größer als %d, verwende %d", name, number, maximum, maximum)
+		log.Printf("[WARN] %s=%d is greater than %d, using %d", name, number, maximum, maximum)
 		return maximum
 	}
 	return number

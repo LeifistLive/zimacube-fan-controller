@@ -1,5 +1,5 @@
 #!/bin/sh
-# Kleiner Wrapper um die REST-API, gedacht fuer "docker exec".
+# Small wrapper around the REST API, meant for "docker exec".
 set -eu
 
 BASE_URL="${FANCTL_URL:-http://127.0.0.1:8080}"
@@ -13,10 +13,9 @@ usage() {
 	exit 2
 }
 
-# Loggt sich per HTTP-Basic-Auth ein (derselbe Mechanismus wie die
-# Login-Seite) und speichert die resultierende Session-Cookie. Ohne
-# ADMIN_PASSWORD ist der Login serverseitig deaktiviert, ein Login-Versuch
-# schadet dann nicht, liefert aber auch keine Cookie.
+# Logs in via HTTP Basic Auth (the same mechanism the login page uses) and
+# saves the resulting session cookie. Without ADMIN_PASSWORD the login is
+# disabled server-side; a login attempt is then harmless but yields no cookie.
 login() {
 	wget -qO- --timeout=15 --method=POST --body-data= \
 		--header="Authorization: Basic $(printf '%s:%s' "$ADMIN_USER" "$ADMIN_PASSWORD" | base64)" \
@@ -67,7 +66,7 @@ case "$COMMAND" in
 	test)
 		[ -n "${2:-}" ] || usage
 		is_number "$2" || usage
-		[ "$2" -ge 1 ] && [ "$2" -le 100 ] || { echo "Prozentwert muss zwischen 1 und 100 liegen" >&2; exit 2; }
+		[ "$2" -ge 1 ] && [ "$2" -le 100 ] || { echo "percentage must be between 1 and 100" >&2; exit 2; }
 		request POST "/api/test/$2"
 		;;
 	help | -h | --help) usage ;;

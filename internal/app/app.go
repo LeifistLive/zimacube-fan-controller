@@ -182,7 +182,7 @@ type App struct {
 func New(cfg Config) (*App, error) {
 	cfg = cfg.sanitized()
 	if !controller.ValidAddress(cfg.I2CAddress) {
-		return nil, fmt.Errorf("ungültige I²C-Adresse %q", cfg.I2CAddress)
+		return nil, fmt.Errorf("invalid I²C address %q", cfg.I2CAddress)
 	}
 
 	st := store.New(cfg.DataDir, cfg.MaxLogLines)
@@ -216,7 +216,7 @@ func New(cfg Config) (*App, error) {
 		// A password that cannot be hashed must never fall back to "auth
 		// disabled" (that would mean the dashboard is open); refuse to start
 		// instead, exactly like the invalid-I2C-address check above.
-		return nil, fmt.Errorf("Login-Konfiguration ungültig: %w", err)
+		return nil, fmt.Errorf("invalid login configuration: %w", err)
 	}
 	app.auth = auth
 
@@ -225,20 +225,20 @@ func New(cfg Config) (*App, error) {
 	case err == nil:
 		app.runtime = loaded
 	case errors.Is(err, os.ErrNotExist):
-		log.Printf("[INFO] Keine %s vorhanden, Standardprofile werden verwendet", configFile)
+		log.Printf("[INFO] No %s found, using default profiles", configFile)
 	default:
-		log.Printf("[WARN] %s wird ignoriert (%v), Standardprofile werden verwendet", configFile, err)
+		log.Printf("[WARN] %s ignored (%v), using default profiles", configFile, err)
 		_ = st.AppendEvent(store.Event{
 			Time:    time.Now(),
 			Type:    "config",
-			Message: configFile + " unbrauchbar: " + err.Error(),
+			Message: configFile + " unusable: " + err.Error(),
 		})
 	}
 
 	app.override = app.loadOverride()
 
 	if profile, ok := app.runtime.Profiles[app.runtime.ActiveProfile]; ok && profile.ArrayBoostPercent < 50 {
-		log.Printf("[WARN] Sicherheitsdrehzahl von Profil %q ist nur %d%%, bei Sensorausfall bleibt es leise",
+		log.Printf("[WARN] safety speed for profile %q is only %d%%, it stays quiet on sensor failure",
 			app.runtime.ActiveProfile, profile.ArrayBoostPercent)
 	}
 	return app, nil
@@ -303,12 +303,12 @@ func normalizeRuntimeConfig(in RuntimeConfig) (RuntimeConfig, error) {
 	// before this field existed; treat it as version 1 so existing
 	// installations keep working without a manual migration step.
 	if in.ConfigVersion > currentConfigVersion {
-		return RuntimeConfig{}, fmt.Errorf("config_version %d wird von dieser Version nicht unterstützt (höchstens %d)",
+		return RuntimeConfig{}, fmt.Errorf("config_version %d is not supported by this version (max %d)",
 			in.ConfigVersion, currentConfigVersion)
 	}
 
 	if len(in.Profiles) == 0 {
-		return RuntimeConfig{}, errors.New("mindestens ein Profil erforderlich")
+		return RuntimeConfig{}, errors.New("at least one profile is required")
 	}
 
 	out := RuntimeConfig{
@@ -319,13 +319,13 @@ func normalizeRuntimeConfig(in RuntimeConfig) (RuntimeConfig, error) {
 
 	for name, profile := range in.Profiles {
 		if strings.TrimSpace(name) == "" {
-			return RuntimeConfig{}, errors.New("Profilname darf nicht leer sein")
+			return RuntimeConfig{}, errors.New("profile name must not be empty")
 		}
 		if len(name) > maxProfileNameLength {
-			return RuntimeConfig{}, fmt.Errorf("Profilname %q ist länger als %d Zeichen", name, maxProfileNameLength)
+			return RuntimeConfig{}, fmt.Errorf("profile name %q is longer than %d characters", name, maxProfileNameLength)
 		}
 		if len(profile.Name) > maxProfileNameLength {
-			return RuntimeConfig{}, fmt.Errorf("Anzeigename %q von Profil %q ist länger als %d Zeichen", profile.Name, name, maxProfileNameLength)
+			return RuntimeConfig{}, fmt.Errorf("display name %q of profile %q is longer than %d characters", profile.Name, name, maxProfileNameLength)
 		}
 		curve, err := profile.Curve.Normalized()
 		if err != nil {
@@ -338,11 +338,11 @@ func normalizeRuntimeConfig(in RuntimeConfig) (RuntimeConfig, error) {
 			return RuntimeConfig{}, err
 		}
 		if profile.EmergencyTemperature < 20 || profile.EmergencyTemperature > 100 {
-			return RuntimeConfig{}, fmt.Errorf("Profil %q: emergency_temperature %d liegt nicht zwischen 20 und 100",
+			return RuntimeConfig{}, fmt.Errorf("profile %q: emergency_temperature %d is not between 20 and 100",
 				name, profile.EmergencyTemperature)
 		}
 		if profile.HysteresisC < 0 || profile.HysteresisC > 20 {
-			return RuntimeConfig{}, fmt.Errorf("Profil %q: hysteresis_c %d liegt nicht zwischen 0 und 20",
+			return RuntimeConfig{}, fmt.Errorf("profile %q: hysteresis_c %d is not between 0 and 20",
 				name, profile.HysteresisC)
 		}
 		if strings.TrimSpace(profile.Name) == "" {
@@ -353,14 +353,14 @@ func normalizeRuntimeConfig(in RuntimeConfig) (RuntimeConfig, error) {
 	}
 
 	if _, ok := out.Profiles[out.ActiveProfile]; !ok {
-		return RuntimeConfig{}, fmt.Errorf("aktives Profil %q existiert nicht", out.ActiveProfile)
+		return RuntimeConfig{}, fmt.Errorf("active profile %q does not exist", out.ActiveProfile)
 	}
 	return out, nil
 }
 
 func checkPercent(field, profileName string, value int) error {
 	if value < controller.MinPercent || value > controller.MaxPercent {
-		return fmt.Errorf("Profil %q: %s %d liegt nicht zwischen %d und %d",
+		return fmt.Errorf("profile %q: %s %d is not between %d and %d",
 			profileName, field, value, controller.MinPercent, controller.MaxPercent)
 	}
 	return nil
@@ -384,13 +384,13 @@ func (a *App) AwaitController(ctx context.Context, limit time.Duration) error {
 			return nil
 		}
 		if err != nil {
-			log.Printf("[WARN] Controller-Suche fehlgeschlagen: %v", err)
+			log.Printf("[WARN] controller search failed: %v", err)
 		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-deadline.C:
-			return fmt.Errorf("Adresse %s auf Bus %d antwortet nicht", a.cfg.I2CAddress, a.cfg.I2CBus)
+			return fmt.Errorf("address %s on bus %d is not responding", a.cfg.I2CAddress, a.cfg.I2CBus)
 		case <-ticker.C:
 		}
 	}
@@ -425,17 +425,17 @@ func (a *App) ApplySafeState(percent int) {
 	defer cancel()
 
 	if err := a.i2c.SetPercent(ctx, percent); err != nil {
-		log.Printf("[WARN] Abschaltdrehzahl %d%% konnte nicht gesetzt werden: %v", percent, err)
+		log.Printf("[WARN] shutdown speed %d%% could not be set: %v", percent, err)
 		return
 	}
 	// Deliberately worded so this line is easy to grep for after the
 	// container has already stopped, to confirm the safe speed was really
 	// written before Docker terminated the process.
-	log.Printf("[OK] Safe-Shutdown-Drehzahl %d%% geschrieben, bevor der Dienst beendet wird", percent)
+	log.Printf("[OK] safe-shutdown speed %d%% written before the service stops", percent)
 	a.appendEvent(store.Event{
 		Time:    time.Now(),
 		Type:    "shutdown",
-		Message: fmt.Sprintf("Abschaltdrehzahl %d%% gesetzt", percent),
+		Message: fmt.Sprintf("shutdown speed %d%% set", percent),
 	})
 }
 
@@ -478,7 +478,7 @@ func (a *App) appendEvent(event store.Event) {
 	err := a.store.AppendEvent(event)
 	a.setStorageOK(storageEvents, err == nil)
 	if err != nil {
-		log.Printf("[WARN] Ereignis konnte nicht gespeichert werden: %v", err)
+		log.Printf("[WARN] event could not be saved: %v", err)
 	}
 }
 
@@ -486,7 +486,7 @@ func (a *App) appendHistory(point store.HistoryPoint) {
 	err := a.store.AppendHistory(point)
 	a.setStorageOK(storageHistory, err == nil)
 	if err != nil {
-		log.Printf("[WARN] Verlaufspunkt konnte nicht gespeichert werden: %v", err)
+		log.Printf("[WARN] history point could not be saved: %v", err)
 	}
 }
 
@@ -497,40 +497,40 @@ func decide(profile Profile, reading sample, override Override, lastFan int) dec
 	result := decision{
 		Percent: profile.Curve.Speed(reading.Temperature),
 		Mode:    ModeAutomatic,
-		Reason:  fmt.Sprintf("Temperaturkurve: höchste HDD-Temperatur %d °C", reading.Temperature),
+		Reason:  fmt.Sprintf("temperature curve: highest HDD temperature %d °C", reading.Temperature),
 	}
 	if !reading.Valid {
 		result.Percent = failsafe
 		result.Mode = ModeFailsafe
-		result.Reason = "HDD-Temperatur unbekannt, Sicherheitsdrehzahl"
+		result.Reason = "HDD temperature unknown, safety speed"
 	}
 
 	switch override.Mode {
 	case ModeManual:
 		result.Percent = override.Percent
 		result.Mode = ModeManual
-		result.Reason = fmt.Sprintf("manuelle Vorgabe %d%%", override.Percent)
+		result.Reason = fmt.Sprintf("manual setting %d%%", override.Percent)
 		if !reading.Valid && result.Percent < failsafe {
 			result.Percent = failsafe
 			result.Mode = ModeFailsafe
-			result.Reason = "HDD-Temperatur unbekannt, Sicherheitsdrehzahl über manueller Vorgabe"
+			result.Reason = "HDD temperature unknown, safety speed overrides manual setting"
 		}
 	case ModeEmergency:
 		result.Percent = profile.EmergencyPercent
 		result.Mode = ModeEmergency
-		result.Reason = "manueller Notfallmodus"
+		result.Reason = "manual emergency mode"
 	}
 
 	if arrayActive(reading.Operation) && result.Percent < profile.ArrayBoostPercent {
 		result.Percent = profile.ArrayBoostPercent
 		result.Mode = ModeArrayBoost
-		result.Reason = "Array-Operation läuft: " + reading.Operation
+		result.Reason = "array operation running: " + reading.Operation
 	}
 
 	if reading.Valid && reading.Temperature >= profile.EmergencyTemperature {
 		result.Percent = profile.EmergencyPercent
 		result.Mode = ModeEmergency
-		result.Reason = fmt.Sprintf("Notfalltemperatur erreicht: %d °C (Grenze %d °C)",
+		result.Reason = fmt.Sprintf("emergency temperature reached: %d °C (limit %d °C)",
 			reading.Temperature, profile.EmergencyTemperature)
 	}
 
@@ -541,7 +541,7 @@ func decide(profile Profile, reading sample, override Override, lastFan int) dec
 		threshold := profile.Curve.ThresholdForSpeed(lastFan)
 		if reading.Temperature > threshold-profile.HysteresisC {
 			result.Percent = lastFan
-			result.Reason += fmt.Sprintf(" (Hysterese hält %d%%)", lastFan)
+			result.Reason += fmt.Sprintf(" (hysteresis holds %d%%)", lastFan)
 		}
 	}
 
@@ -647,21 +647,21 @@ func (a *App) evaluate(ctx context.Context) {
 	a.mu.RUnlock()
 
 	if tempErr != nil && previousTempOK {
-		log.Printf("[ERROR] HDD-Temperatur nicht lesbar (%v), Sicherheitsdrehzahl aktiv", tempErr)
+		log.Printf("[ERROR] HDD temperature unreadable (%v), safety speed active", tempErr)
 		a.appendEvent(store.Event{
 			Time:    now,
 			Type:    "sensor",
-			Message: "HDD-Temperatur nicht lesbar: " + tempErr.Error(),
+			Message: "HDD temperature unreadable: " + tempErr.Error(),
 		})
 	}
 	if tempErr == nil && !previousTempOK {
-		log.Printf("[OK] HDD-Temperatur wieder lesbar")
+		log.Printf("[OK] HDD temperature readable again")
 	}
 	if opErr != nil && operation == unraid.OperationUnknown {
-		log.Printf("[WARN] Array-Status nicht lesbar: %v", opErr)
+		log.Printf("[WARN] array status unreadable: %v", opErr)
 	}
 	if !profileFound {
-		log.Printf("[ERROR] Aktives Profil %q fehlt, es gilt die Sicherheitsdrehzahl", activeProfile)
+		log.Printf("[ERROR] active profile %q missing, safety speed applies", activeProfile)
 	}
 
 	result := decide(profile, reading, override, lastFan)
@@ -679,7 +679,7 @@ func (a *App) evaluate(ctx context.Context) {
 			statusErr = err
 		case !found:
 			online = false
-			statusErr = fmt.Errorf("Adresse %s antwortet nicht auf Bus %d", a.cfg.I2CAddress, a.cfg.I2CBus)
+			statusErr = fmt.Errorf("address %s is not responding on bus %d", a.cfg.I2CAddress, a.cfg.I2CBus)
 		default:
 			a.mu.Lock()
 			a.state.detectAt = now
@@ -702,9 +702,9 @@ func (a *App) evaluate(ctx context.Context) {
 		writeErr = statusErr
 	case attemptWrite:
 		if valueChanged {
-			log.Printf("[INFO] Setze Lüfter auf %d%%, %s", result.Percent, result.Reason)
+			log.Printf("[INFO] setting fan to %d%%, %s", result.Percent, result.Reason)
 		} else {
-			log.Printf("[INFO] Erneutes Schreiben von %d%% (Reapply)", result.Percent)
+			log.Printf("[INFO] rewriting %d%% (reapply)", result.Percent)
 		}
 		writeErr = a.i2c.SetPercent(ctx, result.Percent)
 		writeOK = writeErr == nil
@@ -717,7 +717,7 @@ func (a *App) evaluate(ctx context.Context) {
 				})
 			}
 		} else {
-			log.Printf("[ERROR] Lüftergeschwindigkeit konnte nicht gesetzt werden: %v", writeErr)
+			log.Printf("[ERROR] fan speed could not be set: %v", writeErr)
 		}
 	}
 
@@ -768,9 +768,9 @@ func (a *App) evaluate(ctx context.Context) {
 
 	if online != previousOnline {
 		if online {
-			log.Printf("[OK] I²C-Controller erreichbar")
+			log.Printf("[OK] I²C controller reachable")
 		} else {
-			log.Printf("[ERROR] I²C-Controller nicht erreichbar: %v", statusErr)
+			log.Printf("[ERROR] I²C controller unreachable: %v", statusErr)
 		}
 	}
 	if shouldHistory {
@@ -786,7 +786,7 @@ func (a *App) evaluate(ctx context.Context) {
 		a.appendEvent(store.Event{
 			Time:    now,
 			Type:    "mode",
-			Message: fmt.Sprintf("Modus=%s, Array=%s", result.Mode, operation),
+			Message: fmt.Sprintf("Mode=%s, Array=%s", result.Mode, operation),
 		})
 	}
 }

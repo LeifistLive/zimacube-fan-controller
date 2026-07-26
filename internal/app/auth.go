@@ -67,12 +67,12 @@ func newAuth(user, password string) (*auth, error) {
 	go a.sweepExpiredPeriodically()
 
 	if password == "" {
-		log.Printf("[WARN] ADMIN_PASSWORD ist leer, das Dashboard ist ohne Login erreichbar")
+		log.Printf("[WARN] ADMIN_PASSWORD is empty, the dashboard is reachable without login")
 		return a, nil
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
 	if err != nil {
-		return nil, fmt.Errorf("ADMIN_PASSWORD konnte nicht gehasht werden: %w", err)
+		return nil, fmt.Errorf("ADMIN_PASSWORD could not be hashed: %w", err)
 	}
 	a.passwordHash = hash
 	a.enabled = true
@@ -268,7 +268,7 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !a.auth.loginLimiterFor(clientIP(r)).Allow(time.Now(), loginRateInterval) {
-		writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "zu viele Loginversuche, bitte kurz warten"})
+		writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "too many login attempts, please wait a moment"})
 		return
 	}
 	if !a.auth.enabled {
@@ -278,13 +278,13 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	user, password, ok := r.BasicAuth()
 	if !ok || !a.auth.verify(user, password) {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "Benutzername oder Passwort falsch"})
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid username or password"})
 		return
 	}
 
 	session, err := a.auth.createSession()
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Session konnte nicht erstellt werden"})
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "could not create session"})
 		return
 	}
 	http.SetCookie(w, sessionCookie(r, session, int(sessionTTL.Seconds())))

@@ -87,7 +87,7 @@ func securityHeaders(next http.Handler) http.Handler {
 func (a *App) guardWrite(category string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !a.writeLimiters[category].Allow(time.Now(), time.Second) {
-			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "zu viele Anfragen, bitte kurz warten"})
+			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "too many requests, please wait a moment"})
 			return
 		}
 		next(w, r)
@@ -96,7 +96,7 @@ func (a *App) guardWrite(category string, next http.HandlerFunc) http.HandlerFun
 
 func checkSameOrigin(r *http.Request) error {
 	if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "same-origin" && site != "none" {
-		return errors.New("cross-site-Anfrage abgelehnt")
+		return errors.New("cross-site request rejected")
 	}
 	origin := r.Header.Get("Origin")
 	if origin == "" {
@@ -104,10 +104,10 @@ func checkSameOrigin(r *http.Request) error {
 	}
 	parsed, err := url.Parse(origin)
 	if err != nil {
-		return errors.New("ungültiger Origin-Header")
+		return errors.New("invalid Origin header")
 	}
 	if parsed.Host != r.Host {
-		return errors.New("cross-origin-Anfrage abgelehnt")
+		return errors.New("cross-origin request rejected")
 	}
 	return nil
 }
@@ -185,11 +185,11 @@ func (a *App) handleConfigUpdate(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&incoming); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "ungültiges JSON: " + err.Error()})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON: " + err.Error()})
 		return
 	}
 	if err := decoder.Decode(new(json.RawMessage)); !errors.Is(err, io.EOF) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unerwartete Daten nach dem JSON-Objekt"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unexpected data after the JSON object"})
 		return
 	}
 
@@ -264,7 +264,7 @@ func (a *App) handleProfile(w http.ResponseWriter, r *http.Request) {
 	candidate := a.runtime
 	a.mu.RUnlock()
 	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Profil nicht gefunden"})
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "profile not found"})
 		return
 	}
 	candidate.ActiveProfile = name
@@ -297,14 +297,14 @@ func (a *App) handleFanTest(w http.ResponseWriter, r *http.Request) {
 	// only a few seconds, but stacking them would defeat the point of a
 	// controlled test).
 	if !a.testMu.TryLock() {
-		writeJSON(w, http.StatusConflict, map[string]string{"error": "Lüftertest läuft bereits"})
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "fan test already running"})
 		return
 	}
 	defer a.testMu.Unlock()
 
 	now := time.Now()
 	if now.Before(a.testCooldownUntil) {
-		writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "Lüftertest im Cooldown, bitte kurz warten"})
+		writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "fan test in cooldown, please wait a moment"})
 		return
 	}
 
@@ -315,7 +315,7 @@ func (a *App) handleFanTest(w http.ResponseWriter, r *http.Request) {
 	if profileFound {
 		if floor := fanTestFloor(profile, status); percent < floor {
 			writeJSON(w, http.StatusConflict, map[string]any{
-				"error":           fmt.Sprintf("Testwert %d%% unterschreitet die aktuelle Sicherheitsuntergrenze von %d%%", percent, floor),
+				"error":           fmt.Sprintf("test value %d%% is below the current safety floor of %d%%", percent, floor),
 				"minimum_percent": floor,
 			})
 			return
@@ -390,7 +390,7 @@ func (a *App) loadOverride() Override {
 func parsePercent(raw string) (int, error) {
 	percent, err := strconv.Atoi(raw)
 	if err != nil || percent < controller.MinPercent || percent > controller.MaxPercent {
-		return 0, fmt.Errorf("Prozentwert muss zwischen %d und %d liegen", controller.MinPercent, controller.MaxPercent)
+		return 0, fmt.Errorf("percentage must be between %d and %d", controller.MinPercent, controller.MaxPercent)
 	}
 	return percent, nil
 }

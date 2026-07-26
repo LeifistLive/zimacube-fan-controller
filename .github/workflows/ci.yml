@@ -15,11 +15,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.24"
-          # Kein go.sum vorhanden (keine Abhaengigkeiten), also nichts zu
-          # cachen; siehe go-mod-tidy-Schritt unten, der das erzwingt, sobald
-          # sich das aendert.
-          cache: false
-      - name: go.mod/go.sum konsistent halten
+          cache: true
+      - name: keep go.mod/go.sum consistent
         run: |
           go mod tidy
           git diff --exit-code -- go.mod go.sum
@@ -30,15 +27,15 @@ jobs:
         run: |
           files="$(gofmt -l .)"
           if [ -n "$files" ]; then
-            echo "Nicht formatiert:"
+            echo "Not formatted:"
             echo "$files"
             exit 1
           fi
       - uses: golangci/golangci-lint-action@v6
         with:
-          # Feste Version statt "latest", damit ein golangci-lint-Upgrade
-          # (z. B. auf v2 mit neuem Config-Format) nicht unbemerkt die
-          # CI-Ergebnisse aendert.
+          # Pinned version instead of "latest", so a golangci-lint upgrade
+          # (e.g. to v2 with a new config format) does not silently change
+          # CI results.
           version: v1.64.2
       - run: docker compose config
       - run: docker build -t zimacube-fan-controller:test .

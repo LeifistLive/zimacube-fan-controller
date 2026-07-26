@@ -2,36 +2,35 @@
 
 ## Login
 
-- `GET /login` – Login-Seite (öffentlich)
-- `POST /login` – erwartet `Authorization: Basic base64(user:passwort)`,
-  setzt bei Erfolg die Session-Cookie `zimafan_session` (24h gleitend)
-- `POST /logout` – beendet die Session
+- `GET /login` – login page (public)
+- `POST /login` – expects `Authorization: Basic base64(user:password)`,
+  sets the `zimafan_session` session cookie on success (24h sliding)
+- `POST /logout` – ends the session
 
-Ist `ADMIN_PASSWORD` gesetzt, brauchen alle Routen außer `GET /login`,
-`POST /login` und `GET /api/health` eine gültige Session; ohne Session gibt
-es 401 (bei `GET /` einen 302-Redirect nach `/login`). Ist `ADMIN_PASSWORD`
-leer, ist der Login deaktiviert und alles offen erreichbar.
+If `ADMIN_PASSWORD` is set, every route except `GET /login`, `POST /login`
+and `GET /api/health` requires a valid session; without a session this
+returns 401 (a 302 redirect to `/login` for `GET /`). If `ADMIN_PASSWORD` is
+empty, login is disabled and everything is openly reachable.
 
-`scripts/fanctl` (für `docker exec`) loggt sich automatisch mit
-`ADMIN_USER`/`ADMIN_PASSWORD` aus der Container-Umgebung ein und cached die
-Session in `/tmp/fanctl-session`.
+`scripts/fanctl` (for `docker exec`) automatically logs in with
+`ADMIN_USER`/`ADMIN_PASSWORD` from the container environment and caches the
+session in `/tmp/fanctl-session`.
 
-`POST /login` ist pro Client-IP auf einen Versuch alle 2 Sekunden begrenzt
-(nicht global), damit ein einzelner Client niemals den Login für alle
-anderen blockieren kann. Das Session-Cookie bekommt automatisch `Secure`,
-sobald die Anfrage über TLS ankommt (direkt oder über
-`X-Forwarded-Proto: https` hinter einem Reverse-Proxy) – bei reinem HTTP im
-LAN bleibt es unverändert nutzbar.
+`POST /login` is limited to one attempt every 2 seconds per client IP (not
+globally), so a single client can never block login for everyone else. The
+session cookie automatically gets `Secure` as soon as the request arrives
+over TLS (directly, or via `X-Forwarded-Proto: https` behind a reverse
+proxy) – it stays usable unchanged over plain HTTP on the LAN.
 
-## Lesend
+## Read
 
 - `GET /api/status`
-- `GET /api/health` (immer ohne Login erreichbar, für Healthcheck/Monitoring)
+- `GET /api/health` (always reachable without login, for healthcheck/monitoring)
 - `GET /api/history?limit=288`
 - `GET /api/events?limit=100`
 - `GET /api/config`
 
-## Schreibend
+## Write
 
 - `POST /api/fan/{1-100}`
 - `POST /api/mode/auto`
@@ -40,51 +39,50 @@ LAN bleibt es unverändert nutzbar.
 - `POST /api/test/{1-100}`
 - `POST /api/config`
 
-Unabhängig von der Session werden Anfragen mit fremdem `Origin` oder
-`Sec-Fetch-Site: cross-site` mit 403 abgelehnt.
+Independently of the session, requests with a foreign `Origin` or
+`Sec-Fetch-Site: cross-site` are rejected with 403.
 
-Schreibende Endpunkte sind pro Kategorie (Override: `fan`/`mode/auto`/
-`mode/emergency`, `profile`, `config`, `test`) auf einen Schreibvorgang pro
-Sekunde begrenzt; ein Verstoß liefert 429. `POST /api/test/{percent}` lässt
-zusätzlich nur einen aktiven Test gleichzeitig zu (409, wenn schon einer
-läuft) und hat danach einen eigenen 5-Sekunden-Cooldown (429 währenddessen).
+Write endpoints are limited per category (override: `fan`/`mode/auto`/
+`mode/emergency`, `profile`, `config`, `test`) to one write per second; a
+violation returns 429. `POST /api/test/{percent}` additionally allows only
+one active test at a time (409 if one is already running) and then has its
+own 5-second cooldown (429 during that time).
 
-## Statusfelder
+## Status Fields
 
-| Feld | Bedeutung |
+| Field | Meaning |
 | --- | --- |
 | `mode` | `automatic`, `manual`, `emergency`, `array-boost`, `failsafe` |
-| `target_percent` | Von der Regellogik angeforderter Prozentwert (kann sich ändern, auch wenn das Schreiben fehlschlägt) |
-| `last_applied_percent` | Zuletzt tatsächlich erfolgreich per `i2cset` geschriebener Wert |
-| `fan_percent` | Veralteter Alias für `target_percent`, bleibt aus Kompatibilitätsgründen erhalten |
-| `feedback_available` | Immer `false`: der Controller hat keine RPM/PWM-Rückmeldung, `last_applied_percent` ist nur der zuletzt geschriebene Wert, keine Hardware-Bestätigung |
-| `temperature_valid` | `false`, wenn `disks.ini` nicht lesbar war |
-| `disks_reporting` | Anzahl der HDD-Abschnitte mit `temp=` in `disks.ini` (Cache/Flash-Geräte zählen nicht mit) |
-| `disks` | Ein Eintrag je HDD: `name`, `temperature`, `valid` (`false` = Standby/unlesbar) |
-| `controller_online` | Ergebnis der letzten Erreichbarkeitsprüfung |
-| `last_write_successful` | Ergebnis des letzten `i2cset` |
+| `target_percent` | Percentage requested by the control logic (can change even if the write fails) |
+| `last_applied_percent` | Value last actually written successfully via `i2cset` |
+| `fan_percent` | Deprecated alias for `target_percent`, kept for compatibility |
+| `feedback_available` | Always `false`: the controller has no RPM/PWM feedback, `last_applied_percent` is only the last value written, not a hardware confirmation |
+| `temperature_valid` | `false` if `disks.ini` could not be read |
+| `disks_reporting` | Number of HDD sections with `temp=` in `disks.ini` (cache/flash devices do not count) |
+| `disks` | One entry per HDD: `name`, `temperature`, `valid` (`false` = standby/unreadable) |
+| `controller_online` | Result of the last reachability check |
+| `last_write_successful` | Result of the last `i2cset` |
 
-`GET /api/health` liefert 503, solange der Controller offline ist, der letzte
-Schreibvorgang fehlschlug, die Temperatur unbekannt ist, das aktive Profil
-fehlt (`config`), die letzte Persistenz fehlschlug (`storage`) oder der
-Status veraltet ist. Neben dem Gesamt-`healthy` liefert die Antwort die
-Einzelprüfungen `status` (`"healthy"`/`"unhealthy"`), `controller`, `config`,
-`last_write_successful` und `storage` getrennt, damit Monitoring (z. B.
-Uptime Kuma) die Ursache erkennen kann.
+`GET /api/health` returns 503 while the controller is offline, the last
+write failed, the temperature is unknown, the active profile is missing
+(`config`), the last persistence attempt failed (`storage`), or the status
+is stale. Alongside the overall `healthy`, the response returns the
+individual checks `status` (`"healthy"`/`"unhealthy"`), `controller`,
+`config`, `last_write_successful` and `storage` separately, so monitoring
+(e.g. Uptime Kuma) can identify the cause.
 
-## Konfiguration schreiben
+## Writing Configuration
 
-`POST /api/config` erwartet die vollständige Konfiguration. Profile werden
-validiert: Kurvenpunkte müssen zwischen 1 und 100 Prozent liegen, dürfen keine
-doppelten Temperaturen enthalten und nicht mit steigender Temperatur fallen.
-Unbekannte JSON-Felder und Daten nach dem JSON-Objekt werden abgelehnt.
-Abgelehnte Konfigurationen ändern nichts.
+`POST /api/config` expects the complete configuration. Profiles are
+validated: curve points must be between 1 and 100 percent, must not contain
+duplicate temperatures, and must not fall as temperature rises. Unknown JSON
+fields and data after the JSON object are rejected. Rejected configurations
+change nothing.
 
-`config_version` kennzeichnet das Konfigurationsformat (aktuell `1`). Fehlt
-das Feld (Konfiguration von vor dieser Änderung), wird stillschweigend
-Version 1 angenommen; eine höhere Version als von diesem Binary unterstützt
-wird abgelehnt.
+`config_version` identifies the configuration format (currently `1`). If the
+field is missing (a configuration from before this change), version 1 is
+silently assumed; a version higher than this binary supports is rejected.
 
-Ein Lüftertest (`POST /api/test/{percent}`) wird mit 409 abgelehnt, wenn der
-Wert die aktuelle Notfall-, Failsafe- oder Array-Boost-Untergrenze
-unterschreiten würde; die Antwort enthält `minimum_percent`.
+A fan test (`POST /api/test/{percent}`) is rejected with 409 if the value
+would fall below the current emergency, failsafe, or array-boost floor; the
+response includes `minimum_percent`.

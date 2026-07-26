@@ -11,7 +11,7 @@ func testProfile(t *testing.T) Profile {
 	t.Helper()
 	curve, err := controller.ParseCurve("0:60,36:65,40:75,43:85,46:95,48:100")
 	if err != nil {
-		t.Fatalf("Kurve: %v", err)
+		t.Fatalf("curve: %v", err)
 	}
 	return Profile{
 		Name:                 "Balanced",
@@ -31,12 +31,12 @@ func TestDecideFollowsCurve(t *testing.T) {
 	profile := testProfile(t)
 	result := decide(profile, valid(30, unraid.OperationNone), Override{}, 0)
 	if result.Percent != 60 || result.Mode != ModeAutomatic {
-		t.Fatalf("unerwartet: %+v", result)
+		t.Fatalf("unexpected: %+v", result)
 	}
 
 	result = decide(profile, valid(41, unraid.OperationNone), Override{}, 0)
 	if result.Percent != 75 {
-		t.Fatalf("bei 41 Grad erwarte 75%%, habe %d", result.Percent)
+		t.Fatalf("at 41 degrees expected 75%%, got %d", result.Percent)
 	}
 }
 
@@ -44,7 +44,7 @@ func TestDecideEmergencyBeatsManual(t *testing.T) {
 	profile := testProfile(t)
 	result := decide(profile, valid(55, unraid.OperationNone), Override{Mode: ModeManual, Percent: 20}, 0)
 	if result.Percent != 100 || result.Mode != ModeEmergency {
-		t.Fatalf("Notfallschutz greift nicht: %+v", result)
+		t.Fatalf("emergency protection does not kick in: %+v", result)
 	}
 }
 
@@ -52,31 +52,31 @@ func TestDecideArrayBoostBeatsManual(t *testing.T) {
 	profile := testProfile(t)
 	result := decide(profile, valid(30, "parity-check"), Override{Mode: ModeManual, Percent: 20}, 0)
 	if result.Percent != 90 || result.Mode != ModeArrayBoost {
-		t.Fatalf("Array-Boost greift nicht: %+v", result)
+		t.Fatalf("array boost does not kick in: %+v", result)
 	}
 }
 
-// Bei 50 Grad liefert die Kurve schon 100 Prozent, der Boost mit 90 Prozent
-// darf das nicht absenken. Die Notfallgrenze liegt bei 52 Grad, der Modus
-// bleibt also Automatik.
+// At 50 degrees the curve already yields 100 percent, the 90 percent
+// boost must not lower that. The emergency threshold is 52 degrees, so
+// the mode stays automatic.
 func TestDecideArrayBoostDoesNotLowerSpeed(t *testing.T) {
 	profile := testProfile(t)
 	result := decide(profile, valid(50, "parity-check"), Override{}, 0)
 	if result.Percent != 100 {
-		t.Fatalf("Boost senkt die Drehzahl: %+v", result)
+		t.Fatalf("boost lowers the fan speed: %+v", result)
 	}
 	if result.Mode != ModeAutomatic {
-		t.Fatalf("Modus = %q, erwartet %q: %+v", result.Mode, ModeAutomatic, result)
+		t.Fatalf("mode = %q, expected %q: %+v", result.Mode, ModeAutomatic, result)
 	}
 }
 
-// Regression: ein unlesbarer Array-Status ("unknown") darf keinen Dauerboost
-// auslösen.
+// Regression: an unreadable array status ("unknown") must not trigger a
+// continuous boost.
 func TestDecideUnknownOperationDoesNotBoost(t *testing.T) {
 	profile := testProfile(t)
 	result := decide(profile, valid(30, unraid.OperationUnknown), Override{}, 0)
 	if result.Percent != 60 || result.Mode != ModeAutomatic {
-		t.Fatalf("unbekannter Array-Status boostet: %+v", result)
+		t.Fatalf("unknown array status boosts: %+v", result)
 	}
 }
 
@@ -84,7 +84,7 @@ func TestDecideManualIsHonoured(t *testing.T) {
 	profile := testProfile(t)
 	result := decide(profile, valid(30, unraid.OperationNone), Override{Mode: ModeManual, Percent: 25}, 0)
 	if result.Percent != 25 || result.Mode != ModeManual {
-		t.Fatalf("manuelle Vorgabe wird ignoriert: %+v", result)
+		t.Fatalf("manual setting is ignored: %+v", result)
 	}
 }
 
@@ -92,28 +92,28 @@ func TestDecideManualEmergencyOverride(t *testing.T) {
 	profile := testProfile(t)
 	result := decide(profile, valid(30, unraid.OperationNone), Override{Mode: ModeEmergency}, 0)
 	if result.Percent != 100 || result.Mode != ModeEmergency {
-		t.Fatalf("manueller Notfallmodus greift nicht: %+v", result)
+		t.Fatalf("manual emergency mode does not kick in: %+v", result)
 	}
 }
 
-// Regression: eine unlesbare disks.ini führte zur niedrigsten Kurvenstufe.
+// Regression: an unreadable disks.ini resulted in the lowest curve step.
 func TestDecideFailsafeOnUnknownTemperature(t *testing.T) {
 	profile := testProfile(t)
 	unknown := sample{Temperature: 0, Valid: false, Operation: unraid.OperationNone}
 
 	result := decide(profile, unknown, Override{}, 0)
 	if result.Percent != profile.ArrayBoostPercent || result.Mode != ModeFailsafe {
-		t.Fatalf("Sicherheitsdrehzahl fehlt: %+v", result)
+		t.Fatalf("safety fan speed missing: %+v", result)
 	}
 
 	result = decide(profile, unknown, Override{Mode: ModeManual, Percent: 10}, 0)
 	if result.Percent != profile.ArrayBoostPercent || result.Mode != ModeFailsafe {
-		t.Fatalf("manuelle Vorgabe unterläuft die Sicherheitsdrehzahl: %+v", result)
+		t.Fatalf("manual setting undercuts the safety fan speed: %+v", result)
 	}
 
 	result = decide(profile, unknown, Override{Mode: ModeManual, Percent: 100}, 0)
 	if result.Percent != 100 || result.Mode != ModeManual {
-		t.Fatalf("höhere manuelle Vorgabe darf bestehen bleiben: %+v", result)
+		t.Fatalf("a higher manual setting is allowed to stand: %+v", result)
 	}
 }
 
@@ -122,21 +122,21 @@ func TestDecideHysteresisHoldsAndReleases(t *testing.T) {
 
 	held := decide(profile, valid(35, unraid.OperationNone), Override{}, 65)
 	if held.Percent != 65 {
-		t.Fatalf("Hysterese hält nicht: %+v", held)
+		t.Fatalf("hysteresis does not hold: %+v", held)
 	}
 
 	released := decide(profile, valid(33, unraid.OperationNone), Override{}, 65)
 	if released.Percent != 60 {
-		t.Fatalf("Hysterese gibt nicht frei: %+v", released)
+		t.Fatalf("hysteresis does not release: %+v", released)
 	}
 }
 
-// Regression: nach einem Array-Boost hielt die Hysterese die hohe Drehzahl.
+// Regression: after an array boost, hysteresis held the high fan speed.
 func TestDecideHysteresisDoesNotHoldBoostValue(t *testing.T) {
 	profile := testProfile(t)
 	result := decide(profile, valid(30, unraid.OperationNone), Override{}, 100)
 	if result.Percent != 60 {
-		t.Fatalf("Boost-Drehzahl wird festgehalten: %+v", result)
+		t.Fatalf("boost fan speed is being held: %+v", result)
 	}
 }
 
@@ -145,15 +145,15 @@ func TestDecideClampsResult(t *testing.T) {
 	profile.EmergencyPercent = 250
 	result := decide(profile, valid(60, unraid.OperationNone), Override{}, 0)
 	if result.Percent != controller.MaxPercent {
-		t.Fatalf("Ergebnis nicht begrenzt: %+v", result)
+		t.Fatalf("result not clamped: %+v", result)
 	}
 }
 
 func TestArrayActive(t *testing.T) {
 	if arrayActive(unraid.OperationNone) || arrayActive(unraid.OperationUnknown) || arrayActive("") {
-		t.Error("none, unknown und leer dürfen nicht aktiv sein")
+		t.Error("none, unknown, and empty must not be active")
 	}
 	if !arrayActive("parity-check") || !arrayActive("rebuild") {
-		t.Error("laufende Operationen müssen aktiv sein")
+		t.Error("running operations must be active")
 	}
 }

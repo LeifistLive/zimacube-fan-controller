@@ -150,7 +150,7 @@ func addressPresent(output, address string) bool {
 // backoff so that a shutdown is not delayed by sleeping goroutines.
 func (i *I2C) SetPercent(parent context.Context, percent int) error {
 	if percent < MinPercent || percent > MaxPercent {
-		return fmt.Errorf("Prozentwert %d liegt nicht zwischen %d und %d", percent, MinPercent, MaxPercent)
+		return fmt.Errorf("percentage %d is not between %d and %d", percent, MinPercent, MaxPercent)
 	}
 
 	i.mu.Lock()
@@ -191,7 +191,7 @@ func (i *I2C) SetPercent(parent context.Context, percent int) error {
 		if err == nil {
 			return nil
 		}
-		lastErr = fmt.Errorf("Versuch %d/%d: %w: %s", attempt, i.retries, err, strings.TrimSpace(string(out)))
+		lastErr = fmt.Errorf("attempt %d/%d: %w: %s", attempt, i.retries, err, strings.TrimSpace(string(out)))
 		if attempt == i.retries {
 			break
 		}
@@ -204,7 +204,7 @@ func (i *I2C) SetPercent(parent context.Context, percent int) error {
 	}
 
 	if lastErr == nil {
-		lastErr = errors.New("i2cset wurde nicht ausgeführt")
+		lastErr = errors.New("i2cset was never executed")
 	}
 	return lastErr
 }

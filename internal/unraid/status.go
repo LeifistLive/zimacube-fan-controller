@@ -155,7 +155,7 @@ func ReadDiskTemperatures(path string) (DiskTemperatures, error) {
 	}
 
 	if result.Reporting == 0 {
-		return result, fmt.Errorf("keine temp=-Einträge in %s gefunden", path)
+		return result, fmt.Errorf("no temp= entries found in %s", path)
 	}
 
 	// disks.ini lists sections in whatever order emhttp last wrote them,

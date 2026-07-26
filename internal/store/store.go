@@ -119,7 +119,7 @@ func (s *Store) LoadJSON(name string, value any) error {
 		return err
 	}
 	if err := decoder.Decode(new(json.RawMessage)); !errors.Is(err, io.EOF) {
-		return fmt.Errorf("%s: unerwartete Daten nach dem JSON-Objekt", name)
+		return fmt.Errorf("%s: unexpected data after the JSON object", name)
 	}
 	return nil
 }
@@ -219,7 +219,7 @@ func (s *Store) appendJSONLine(name string, value any) error {
 			// Rotation is best effort; the line itself is already written.
 			// Logged rather than silently dropped so a permissions/IO problem
 			// that will keep the file growing unbounded is visible.
-			log.Printf("[WARN] %s: Zeilen konnten nicht gezählt werden, Rotation pausiert: %v", name, err)
+			log.Printf("[WARN] %s: could not count lines, rotation paused: %v", name, err)
 			return nil
 		}
 	}
@@ -228,7 +228,7 @@ func (s *Store) appendJSONLine(name string, value any) error {
 	if count > s.maxLines+s.maxLines/10 {
 		kept, err := prune(path, s.maxLines)
 		if err != nil {
-			log.Printf("[WARN] %s: Rotation fehlgeschlagen, Datei wächst vorerst weiter: %v", name, err)
+			log.Printf("[WARN] %s: rotation failed, file will keep growing for now: %v", name, err)
 		} else {
 			s.counts[name] = kept
 		}

@@ -24,8 +24,8 @@ func newTestApp(t *testing.T, password string) *App {
 		AdminUser:     "admin",
 		AdminPassword: password,
 		I2CAddress:    "0x69",
-		VarINI:        "/nicht/vorhanden/var.ini",
-		DisksINI:      "/nicht/vorhanden/disks.ini",
+		VarINI:        "/nonexistent/var.ini",
+		DisksINI:      "/nonexistent/disks.ini",
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -53,14 +53,14 @@ func loginSession(t *testing.T, handler http.Handler, user, password string) str
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusOK {
-		t.Fatalf("Login = %d, erwartet 200", recorder.Code)
+		t.Fatalf("login = %d, expected 200", recorder.Code)
 	}
 	for _, cookie := range recorder.Result().Cookies() {
 		if cookie.Name == sessionCookieName {
 			return cookie.Value
 		}
 	}
-	t.Fatal("Login lieferte keine Session-Cookie")
+	t.Fatal("login did not return a session cookie")
 	return ""
 }
 
@@ -73,83 +73,83 @@ func TestReadEndpointsAreOpenWhenAuthDisabled(t *testing.T) {
 
 	for _, target := range []string{"/api/status", "/api/config", "/api/history", "/api/events"} {
 		if code := do(t, handler, http.MethodGet, target, nil).Code; code != http.StatusOK {
-			t.Errorf("GET %s = %d, erwartet 200", target, code)
+			t.Errorf("GET %s = %d, expected 200", target, code)
 		}
 	}
 	if code := do(t, handler, http.MethodGet, "/api/health", nil).Code; code != http.StatusServiceUnavailable {
-		t.Errorf("GET /api/health ohne Controller = %d, erwartet 503", code)
+		t.Errorf("GET /api/health without a controller = %d, expected 503", code)
 	}
 }
 
 func TestReadEndpointsRequireSessionWhenAuthEnabled(t *testing.T) {
-	service := newTestApp(t, "geheim")
+	service := newTestApp(t, "secret")
 	handler := service.Routes()
 
 	for _, target := range []string{"/api/status", "/api/config", "/api/history", "/api/events"} {
 		if code := do(t, handler, http.MethodGet, target, nil).Code; code != http.StatusUnauthorized {
-			t.Errorf("GET %s ohne Session = %d, erwartet 401", target, code)
+			t.Errorf("GET %s without a session = %d, expected 401", target, code)
 		}
 	}
 
-	session := loginSession(t, handler, "admin", "geheim")
+	session := loginSession(t, handler, "admin", "secret")
 	for _, target := range []string{"/api/status", "/api/config", "/api/history", "/api/events"} {
 		if code := do(t, handler, http.MethodGet, target, sessionHeaders(session)).Code; code != http.StatusOK {
-			t.Errorf("GET %s mit Session = %d, erwartet 200", target, code)
+			t.Errorf("GET %s with a session = %d, expected 200", target, code)
 		}
 	}
 }
 
-// Regression: /api/health muss auch mit aktiviertem Login ohne Session
-// erreichbar bleiben, sonst können Docker-Healthcheck und externes
-// Monitoring (z. B. Uptime Kuma) den Dienst nicht mehr abfragen.
+// Regression: /api/health must stay reachable without a session even with
+// login enabled, otherwise Docker healthcheck and external monitoring
+// (e.g. Uptime Kuma) can no longer poll the service.
 func TestHealthStaysOpenWhenAuthEnabled(t *testing.T) {
-	handler := newTestApp(t, "geheim").Routes()
+	handler := newTestApp(t, "secret").Routes()
 	if code := do(t, handler, http.MethodGet, "/api/health", nil).Code; code != http.StatusServiceUnavailable {
-		t.Errorf("GET /api/health ohne Session = %d, erwartet 503 (nicht 401)", code)
+		t.Errorf("GET /api/health without a session = %d, expected 503 (not 401)", code)
 	}
 }
 
 func TestIndexRedirectsToLoginWhenUnauthenticated(t *testing.T) {
-	handler := newTestApp(t, "geheim").Routes()
+	handler := newTestApp(t, "secret").Routes()
 	request := httptest.NewRequest(http.MethodGet, "/", nil)
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusFound {
-		t.Fatalf("GET / ohne Session = %d, erwartet 302", recorder.Code)
+		t.Fatalf("GET / without a session = %d, expected 302", recorder.Code)
 	}
 	if location := recorder.Header().Get("Location"); location != "/login" {
-		t.Fatalf("Redirect-Ziel = %q, erwartet /login", location)
+		t.Fatalf("redirect target = %q, expected /login", location)
 	}
 }
 
 func TestLoginRejectsWrongCredentials(t *testing.T) {
-	// Je ein frisches App/Routes-Paar pro Fall: der Login-Endpunkt hat sein
-	// eigenes, strengeres Rate-Limit (loginRateInterval), das ein zweiter
-	// Aufruf auf derselben Instanz sonst mit 429 statt der hier geprüften
-	// 401-Antwort beantworten würde.
+	// One fresh App/Routes pair per case: the login endpoint has its own,
+	// stricter rate limit (loginRateInterval), which a second call on the
+	// same instance would otherwise answer with 429 instead of the 401
+	// response checked here.
 	wrongPassword := httptest.NewRequest(http.MethodPost, "/login", nil)
-	wrongPassword.SetBasicAuth("admin", "falsch")
+	wrongPassword.SetBasicAuth("admin", "wrong")
 	recorder := httptest.NewRecorder()
-	newTestApp(t, "geheim").Routes().ServeHTTP(recorder, wrongPassword)
+	newTestApp(t, "secret").Routes().ServeHTTP(recorder, wrongPassword)
 	if recorder.Code != http.StatusUnauthorized {
-		t.Fatalf("falsches Passwort = %d, erwartet 401", recorder.Code)
+		t.Fatalf("wrong password = %d, expected 401", recorder.Code)
 	}
 
 	wrongUser := httptest.NewRequest(http.MethodPost, "/login", nil)
-	wrongUser.SetBasicAuth("jemand-anderes", "geheim")
+	wrongUser.SetBasicAuth("someone-else", "secret")
 	recorder = httptest.NewRecorder()
-	newTestApp(t, "geheim").Routes().ServeHTTP(recorder, wrongUser)
+	newTestApp(t, "secret").Routes().ServeHTTP(recorder, wrongUser)
 	if recorder.Code != http.StatusUnauthorized {
-		t.Fatalf("falscher Benutzername = %d, erwartet 401", recorder.Code)
+		t.Fatalf("wrong username = %d, expected 401", recorder.Code)
 	}
 }
 
 func TestLogoutInvalidatesSession(t *testing.T) {
-	handler := newTestApp(t, "geheim").Routes()
-	session := loginSession(t, handler, "admin", "geheim")
+	handler := newTestApp(t, "secret").Routes()
+	session := loginSession(t, handler, "admin", "secret")
 
 	if code := do(t, handler, http.MethodGet, "/api/status", sessionHeaders(session)).Code; code != http.StatusOK {
-		t.Fatalf("Session vor Logout = %d, erwartet 200", code)
+		t.Fatalf("session before logout = %d, expected 200", code)
 	}
 
 	logout := httptest.NewRequest(http.MethodPost, "/logout", nil)
@@ -157,7 +157,7 @@ func TestLogoutInvalidatesSession(t *testing.T) {
 	handler.ServeHTTP(httptest.NewRecorder(), logout)
 
 	if code := do(t, handler, http.MethodGet, "/api/status", sessionHeaders(session)).Code; code != http.StatusUnauthorized {
-		t.Fatalf("Session nach Logout = %d, erwartet 401", code)
+		t.Fatalf("session after logout = %d, expected 401", code)
 	}
 }
 
@@ -169,7 +169,7 @@ func TestStaticAssets(t *testing.T) {
 		t.Fatalf("GET / = %d", index.Code)
 	}
 	if !strings.Contains(index.Body.String(), "/app.js") {
-		t.Error("index verweist nicht auf /app.js")
+		t.Error("index does not reference /app.js")
 	}
 	for target, contentType := range map[string]string{"/app.css": "text/css", "/app.js": "text/javascript"} {
 		response := do(t, handler, http.MethodGet, target, nil)
@@ -178,16 +178,16 @@ func TestStaticAssets(t *testing.T) {
 			continue
 		}
 		if !strings.Contains(response.Header().Get("Content-Type"), contentType) {
-			t.Errorf("GET %s hat Content-Type %q", target, response.Header().Get("Content-Type"))
+			t.Errorf("GET %s has Content-Type %q", target, response.Header().Get("Content-Type"))
 		}
 	}
 }
 
-// Regression: "GET /" war ein Catch-all und lieferte für jeden Pfad HTML.
+// Regression: "GET /" was a catch-all and returned HTML for every path.
 func TestUnknownPathIsNotFound(t *testing.T) {
 	handler := newTestApp(t, "").Routes()
-	if code := do(t, handler, http.MethodGet, "/gibt-es-nicht", nil).Code; code != http.StatusNotFound {
-		t.Fatalf("unbekannter Pfad = %d, erwartet 404", code)
+	if code := do(t, handler, http.MethodGet, "/does-not-exist", nil).Code; code != http.StatusNotFound {
+		t.Fatalf("unknown path = %d, expected 404", code)
 	}
 }
 
@@ -195,57 +195,57 @@ func TestContentSecurityPolicyHasNoUnsafeInline(t *testing.T) {
 	handler := newTestApp(t, "").Routes()
 	policy := do(t, handler, http.MethodGet, "/", nil).Header().Get("Content-Security-Policy")
 	if policy == "" {
-		t.Fatal("Content-Security-Policy fehlt")
+		t.Fatal("Content-Security-Policy is missing")
 	}
 	if strings.Contains(policy, "unsafe-inline") {
-		t.Fatalf("Policy erlaubt unsafe-inline: %q", policy)
+		t.Fatalf("policy allows unsafe-inline: %q", policy)
 	}
 }
 
 func TestWriteEndpointsRequireSessionWhenAuthEnabled(t *testing.T) {
-	handler := newTestApp(t, "geheim").Routes()
+	handler := newTestApp(t, "secret").Routes()
 
 	if code := do(t, handler, http.MethodPost, "/api/mode/auto", nil).Code; code != http.StatusUnauthorized {
-		t.Errorf("ohne Session = %d, erwartet 401", code)
+		t.Errorf("without a session = %d, expected 401", code)
 	}
 
-	session := loginSession(t, handler, "admin", "geheim")
+	session := loginSession(t, handler, "admin", "secret")
 	if code := do(t, handler, http.MethodPost, "/api/mode/auto", sessionHeaders(session)).Code; code != http.StatusAccepted {
-		t.Errorf("mit Session = %d, erwartet 202", code)
+		t.Errorf("with a session = %d, expected 202", code)
 	}
 }
 
 func TestWriteEndpointsBlockCrossSite(t *testing.T) {
 	handler := newTestApp(t, "").Routes()
 
-	fremd := map[string]string{"Origin": "http://boese.example"}
-	if code := do(t, handler, http.MethodPost, "/api/mode/auto", fremd).Code; code != http.StatusForbidden {
-		t.Errorf("fremder Origin = %d, erwartet 403", code)
+	foreign := map[string]string{"Origin": "http://evil.example"}
+	if code := do(t, handler, http.MethodPost, "/api/mode/auto", foreign).Code; code != http.StatusForbidden {
+		t.Errorf("foreign origin = %d, expected 403", code)
 	}
 	fetch := map[string]string{"Sec-Fetch-Site": "cross-site"}
 	if code := do(t, handler, http.MethodPost, "/api/mode/auto", fetch).Code; code != http.StatusForbidden {
-		t.Errorf("Sec-Fetch-Site cross-site = %d, erwartet 403", code)
+		t.Errorf("Sec-Fetch-Site cross-site = %d, expected 403", code)
 	}
-	eigen := map[string]string{"Origin": "http://example.com", "Sec-Fetch-Site": "same-origin"}
-	if code := do(t, handler, http.MethodPost, "/api/mode/auto", eigen).Code; code != http.StatusAccepted {
-		t.Errorf("eigener Origin = %d, erwartet 202", code)
+	own := map[string]string{"Origin": "http://example.com", "Sec-Fetch-Site": "same-origin"}
+	if code := do(t, handler, http.MethodPost, "/api/mode/auto", own).Code; code != http.StatusAccepted {
+		t.Errorf("own origin = %d, expected 202", code)
 	}
 }
 
 func TestManualPercentValidation(t *testing.T) {
-	// Jede Anfrage bekommt ihre eigene App-Instanz: seit dem Rate-Limit pro
-	// Kategorie (ein Schreibvorgang pro Sekunde für "override"/"test") würde
-	// ein zweiter Aufruf auf derselben Instanz sonst 429 statt der hier
-	// geprüften Validierungsantwort liefern.
+	// Each request gets its own App instance: since the rate limit is per
+	// category (one write per second for "override"/"test"), a second call
+	// on the same instance would otherwise return 429 instead of the
+	// validation response checked here.
 	for _, target := range []string{"/api/fan/0", "/api/fan/101", "/api/fan/abc", "/api/test/0"} {
 		handler := newTestApp(t, "").Routes()
 		if code := do(t, handler, http.MethodPost, target, nil).Code; code != http.StatusBadRequest {
-			t.Errorf("POST %s = %d, erwartet 400", target, code)
+			t.Errorf("POST %s = %d, expected 400", target, code)
 		}
 	}
 	handler := newTestApp(t, "").Routes()
 	if code := do(t, handler, http.MethodPost, "/api/fan/75", nil).Code; code != http.StatusAccepted {
-		t.Errorf("POST /api/fan/75 = %d, erwartet 202", code)
+		t.Errorf("POST /api/fan/75 = %d, expected 202", code)
 	}
 }
 
@@ -254,21 +254,21 @@ func TestProfileSwitch(t *testing.T) {
 	handler := service.Routes()
 
 	if code := do(t, handler, http.MethodPost, "/api/profile/silent", nil).Code; code != http.StatusAccepted {
-		t.Fatalf("Profilwechsel = %d, erwartet 202", code)
+		t.Fatalf("profile switch = %d, expected 202", code)
 	}
 	service.mu.RLock()
 	active := service.runtime.ActiveProfile
 	service.mu.RUnlock()
 	if active != "silent" {
-		t.Fatalf("aktives Profil = %q", active)
+		t.Fatalf("active profile = %q", active)
 	}
 
-	// Frische Instanz: das Rate-Limit der "profile"-Kategorie (ein
-	// Schreibvorgang pro Sekunde) würde einen zweiten Aufruf auf derselben
-	// Instanz sonst mit 429 statt 404 beantworten.
+	// Fresh instance: the "profile" category's rate limit (one write per
+	// second) would otherwise answer a second call on the same instance
+	// with 429 instead of 404.
 	other := newTestApp(t, "").Routes()
-	if code := do(t, other, http.MethodPost, "/api/profile/gibtsnicht", nil).Code; code != http.StatusNotFound {
-		t.Fatalf("unbekanntes Profil = %d, erwartet 404", code)
+	if code := do(t, other, http.MethodPost, "/api/profile/doesnotexist", nil).Code; code != http.StatusNotFound {
+		t.Fatalf("unknown profile = %d, expected 404", code)
 	}
 }
 
@@ -280,14 +280,14 @@ func TestOverridePersistsManualMode(t *testing.T) {
 
 	restored := service.loadOverride()
 	if restored.Mode != ModeManual || restored.Percent != 42 {
-		t.Fatalf("manueller Modus nicht gespeichert: %+v", restored)
+		t.Fatalf("manual mode not saved: %+v", restored)
 	}
 
 	if err := service.setOverride(Override{}); err != nil {
 		t.Fatalf("setOverride: %v", err)
 	}
 	if cleared := service.loadOverride(); cleared.Mode != "" {
-		t.Fatalf("Automatik nicht gespeichert: %+v", cleared)
+		t.Fatalf("automatic mode not saved: %+v", cleared)
 	}
 }
 
@@ -310,8 +310,8 @@ func TestSetOverrideFailsWhenPersistFails(t *testing.T) {
 	service, err := New(Config{
 		DataDir:    dataDir,
 		I2CAddress: "0x69",
-		VarINI:     "/nicht/vorhanden/var.ini",
-		DisksINI:   "/nicht/vorhanden/disks.ini",
+		VarINI:     "/nonexistent/var.ini",
+		DisksINI:   "/nonexistent/disks.ini",
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -320,14 +320,14 @@ func TestSetOverrideFailsWhenPersistFails(t *testing.T) {
 
 	before := service.loadOverride()
 	if err := service.setOverride(Override{Mode: ModeManual, Percent: 42}); err == nil {
-		t.Fatal("erwarte Fehler, wenn override.json nicht geschrieben werden kann")
+		t.Fatal("expected an error when override.json cannot be written")
 	}
 
 	service.mu.RLock()
 	current := service.override
 	service.mu.RUnlock()
 	if current != before {
-		t.Fatalf("interner Zustand wurde trotz Persistenzfehler geändert: %+v", current)
+		t.Fatalf("internal state changed despite persistence failure: %+v", current)
 	}
 }
 
@@ -336,8 +336,8 @@ func TestManualEndpointReturns500OnPersistFailure(t *testing.T) {
 	service, err := New(Config{
 		DataDir:    dataDir,
 		I2CAddress: "0x69",
-		VarINI:     "/nicht/vorhanden/var.ini",
-		DisksINI:   "/nicht/vorhanden/disks.ini",
+		VarINI:     "/nonexistent/var.ini",
+		DisksINI:   "/nonexistent/disks.ini",
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -346,7 +346,7 @@ func TestManualEndpointReturns500OnPersistFailure(t *testing.T) {
 	handler := service.Routes()
 
 	if code := do(t, handler, http.MethodPost, "/api/fan/75", nil).Code; code != http.StatusInternalServerError {
-		t.Fatalf("POST /api/fan/75 mit blockierter Persistenz = %d, erwartet 500", code)
+		t.Fatalf("POST /api/fan/75 with blocked persistence = %d, expected 500", code)
 	}
 }
 
@@ -354,16 +354,16 @@ func TestFanTestRejectsUnsafeValue(t *testing.T) {
 	service := newTestApp(t, "")
 	handler := service.Routes()
 
-	// Parity-Check aktiv + niedriger Testwert muss unabhängig von der
-	// Hardware (die in Tests nicht existiert) mit 409 abgelehnt werden, da
-	// die Prüfung vor dem eigentlichen I2C-Schreibvorgang greift.
+	// Parity check active + a low test value must be rejected with 409
+	// regardless of the hardware (which doesn't exist in tests), since the
+	// check runs before the actual I2C write.
 	service.mu.Lock()
 	service.status.TemperatureValid = true
 	service.status.ArrayOperation = "parity-check"
 	service.mu.Unlock()
 
 	if code := do(t, handler, http.MethodPost, "/api/test/5", nil).Code; code != http.StatusConflict {
-		t.Fatalf("unsicherer Testwert während Parity-Check = %d, erwartet 409", code)
+		t.Fatalf("unsafe test value during parity check = %d, expected 409", code)
 	}
 }
 
@@ -372,12 +372,12 @@ func TestFanTestRejectsConcurrentRuns(t *testing.T) {
 	handler := service.Routes()
 
 	if !service.testMu.TryLock() {
-		t.Fatal("konnte testMu nicht vorab sperren")
+		t.Fatal("could not pre-lock testMu")
 	}
 	defer service.testMu.Unlock()
 
 	if code := do(t, handler, http.MethodPost, "/api/test/50", nil).Code; code != http.StatusConflict {
-		t.Fatalf("Test während laufendem Test = %d, erwartet 409", code)
+		t.Fatalf("test while a test is already running = %d, expected 409", code)
 	}
 }
 
@@ -390,7 +390,7 @@ func TestFanTestCooldown(t *testing.T) {
 	service.testMu.Unlock()
 
 	if code := do(t, handler, http.MethodPost, "/api/test/50", nil).Code; code != http.StatusTooManyRequests {
-		t.Fatalf("Test im Cooldown = %d, erwartet 429", code)
+		t.Fatalf("test during cooldown = %d, expected 429", code)
 	}
 }
 
@@ -398,26 +398,26 @@ func TestWriteEndpointsAreRateLimitedPerCategory(t *testing.T) {
 	handler := newTestApp(t, "").Routes()
 
 	if code := do(t, handler, http.MethodPost, "/api/mode/auto", nil).Code; code != http.StatusAccepted {
-		t.Fatalf("erster Aufruf = %d, erwartet 202", code)
+		t.Fatalf("first call = %d, expected 202", code)
 	}
 	if code := do(t, handler, http.MethodPost, "/api/mode/auto", nil).Code; code != http.StatusTooManyRequests {
-		t.Fatalf("zweiter Aufruf innerhalb 1s = %d, erwartet 429", code)
+		t.Fatalf("second call within 1s = %d, expected 429", code)
 	}
-	// Eine andere Kategorie ("profile") darf vom Limit der "override"-
-	// Kategorie nicht betroffen sein.
+	// A different category ("profile") must not be affected by the
+	// "override" category's limit.
 	if code := do(t, handler, http.MethodPost, "/api/profile/silent", nil).Code; code != http.StatusAccepted {
-		t.Fatalf("andere Kategorie direkt danach = %d, erwartet 202", code)
+		t.Fatalf("different category right after = %d, expected 202", code)
 	}
 }
 
 func TestConfigUpdateRejectsUnknownFields(t *testing.T) {
 	handler := newTestApp(t, "").Routes()
-	body := `{"active_profile":"balanced","profiles":{},"unbekanntes_feld":true}`
+	body := `{"active_profile":"balanced","profiles":{},"unknown_field":true}`
 	request := httptest.NewRequest(http.MethodPost, "/api/config", strings.NewReader(body))
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusBadRequest {
-		t.Fatalf("unbekanntes Feld = %d, erwartet 400", recorder.Code)
+		t.Fatalf("unknown field = %d, expected 400", recorder.Code)
 	}
 }
 
@@ -428,15 +428,14 @@ func TestConfigUpdateRejectsTrailingData(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusBadRequest {
-		t.Fatalf("Daten nach dem JSON-Objekt = %d, erwartet 400", recorder.Code)
+		t.Fatalf("data after the JSON object = %d, expected 400", recorder.Code)
 	}
 }
 
-// TestConcurrentConfigWritesDoNotInterleave ruft den Handler direkt auf
-// (nicht über Routes()/guardWrite), um configMu unabhängig vom
-// Rate-Limiting zu prüfen: mehrere gleichzeitige Config-Schreibvorgänge
-// dürfen sich nicht überschneiden, config.json muss am Ende exakt einem der
-// Requests entsprechen.
+// TestConcurrentConfigWritesDoNotInterleave calls the handler directly
+// (not through Routes()/guardWrite) to check configMu independently of
+// rate limiting: multiple concurrent config writes must not interleave,
+// config.json must end up matching exactly one of the requests.
 func TestConcurrentConfigWritesDoNotInterleave(t *testing.T) {
 	service := newTestApp(t, "")
 
@@ -458,19 +457,19 @@ func TestConcurrentConfigWritesDoNotInterleave(t *testing.T) {
 
 	for _, code := range codes {
 		if code != http.StatusAccepted {
-			t.Fatalf("unerwarteter Statuscode bei nebenläufigem Config-Update: %d", code)
+			t.Fatalf("unexpected status code during concurrent config update: %d", code)
 		}
 	}
 
 	var onDisk RuntimeConfig
 	if err := service.store.LoadJSON(configFile, &onDisk); err != nil {
-		t.Fatalf("config.json konnte nicht gelesen werden: %v", err)
+		t.Fatalf("could not read config.json: %v", err)
 	}
 	service.mu.RLock()
 	inMemory := service.runtime
 	service.mu.RUnlock()
 	if onDisk.Profiles["balanced"].Curve[0].Percent != inMemory.Profiles["balanced"].Curve[0].Percent {
-		t.Fatalf("config.json (%v) weicht vom Speicherzustand (%v) ab, Schreibvorgänge haben sich überschnitten",
+		t.Fatalf("config.json (%v) differs from in-memory state (%v), writes interleaved",
 			onDisk.Profiles["balanced"], inMemory.Profiles["balanced"])
 	}
 }
@@ -479,31 +478,31 @@ func TestHealthReportsIndividualChecks(t *testing.T) {
 	service := newTestApp(t, "")
 	handler := service.Routes()
 
-	// Kaputtes aktives Profil -> config: false.
+	// Broken active profile -> config: false.
 	service.mu.Lock()
-	service.runtime.ActiveProfile = "existiert-nicht"
+	service.runtime.ActiveProfile = "does-not-exist"
 	service.mu.Unlock()
 
 	recorder := do(t, handler, http.MethodGet, "/api/health", nil)
 	if recorder.Code != http.StatusServiceUnavailable {
-		t.Fatalf("Health mit ungültigem Profil = %d, erwartet 503", recorder.Code)
+		t.Fatalf("health with invalid profile = %d, expected 503", recorder.Code)
 	}
 	var body map[string]any
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
-		t.Fatalf("Health-Antwort ist kein JSON: %v", err)
+		t.Fatalf("health response is not JSON: %v", err)
 	}
 	if config, _ := body["config"].(bool); config {
-		t.Fatalf("config sollte false sein: %+v", body)
+		t.Fatalf("config should be false: %+v", body)
 	}
 
-	// Storage-Fehler simulieren.
+	// Simulate a storage error.
 	service.setStorageOK(storageConfig, false)
 	recorder = do(t, handler, http.MethodGet, "/api/health", nil)
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
-		t.Fatalf("Health-Antwort ist kein JSON: %v", err)
+		t.Fatalf("health response is not JSON: %v", err)
 	}
 	if storage, _ := body["storage"].(bool); storage {
-		t.Fatalf("storage sollte false sein: %+v", body)
+		t.Fatalf("storage should be false: %+v", body)
 	}
 }
 
@@ -514,16 +513,16 @@ func TestStorageHealthDoesNotMaskUnrelatedCategoryFailure(t *testing.T) {
 
 	service.setStorageOK(storageConfig, false)
 	if service.storageHealthy() {
-		t.Fatal("storageHealthy sollte nach fehlgeschlagenem Config-Write false sein")
+		t.Fatal("storageHealthy should be false after a failed config write")
 	}
 
 	service.setStorageOK(storageHistory, true)
 	if service.storageHealthy() {
-		t.Fatal("ein erfolgreicher History-Write darf einen offenen Config-Fehler nicht verdecken")
+		t.Fatal("a successful history write must not mask an open config failure")
 	}
 
 	service.setStorageOK(storageConfig, true)
 	if !service.storageHealthy() {
-		t.Fatal("storageHealthy sollte true sein, sobald auch Config wieder erfolgreich ist")
+		t.Fatal("storageHealthy should be true once config succeeds again too")
 	}
 }

@@ -27,14 +27,14 @@ func TestSaveAndLoadJSON(t *testing.T) {
 		t.Fatalf("LoadJSON: %v", err)
 	}
 	if loaded.Name != "test" || loaded.Value != 7 {
-		t.Fatalf("unerwarteter Inhalt: %+v", loaded)
+		t.Fatalf("unexpected content: %+v", loaded)
 	}
 
 	if err := st.Remove("config.json"); err != nil {
 		t.Fatalf("Remove: %v", err)
 	}
 	if err := st.Remove("config.json"); err != nil {
-		t.Fatalf("zweites Remove darf keinen Fehler liefern: %v", err)
+		t.Fatalf("second Remove must not return an error: %v", err)
 	}
 }
 
@@ -49,14 +49,14 @@ func TestLoadJSONRejectsUnknownFields(t *testing.T) {
 		Name string `json:"name"`
 	}
 
-	raw := []byte(`{"name":"test","unbekannt":true}`)
+	raw := []byte(`{"name":"test","unknown":true}`)
 	if err := os.WriteFile(filepath.Join(dir, "config.json"), raw, 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
 	var loaded payload
 	if err := st.LoadJSON("config.json", &loaded); err == nil {
-		t.Fatal("unbekanntes Feld muss abgelehnt werden")
+		t.Fatal("unknown field must be rejected")
 	}
 }
 
@@ -71,14 +71,14 @@ func TestLoadJSONRejectsTrailingData(t *testing.T) {
 		Name string `json:"name"`
 	}
 
-	raw := []byte(`{"name":"test"}{"name":"zweites-objekt"}`)
+	raw := []byte(`{"name":"test"}{"name":"second-object"}`)
 	if err := os.WriteFile(filepath.Join(dir, "config.json"), raw, 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
 	var loaded payload
 	if err := st.LoadJSON("config.json", &loaded); err == nil {
-		t.Fatal("Daten nach dem ersten JSON-Objekt müssen abgelehnt werden")
+		t.Fatal("data after the first JSON object must be rejected")
 	}
 }
 
@@ -101,10 +101,10 @@ func TestReadEventsReturnsNewestInOrder(t *testing.T) {
 		t.Fatalf("ReadEvents: %v", err)
 	}
 	if len(events) != 3 {
-		t.Fatalf("erwarte 3 Ereignisse, habe %d", len(events))
+		t.Fatalf("expected 3 events, have %d", len(events))
 	}
 	if events[0].Message != "7" || events[2].Message != "9" {
-		t.Fatalf("falsche Reihenfolge: %q, %q", events[0].Message, events[2].Message)
+		t.Fatalf("wrong order: %q, %q", events[0].Message, events[2].Message)
 	}
 }
 
@@ -119,11 +119,11 @@ func TestReadMissingFileIsEmpty(t *testing.T) {
 		t.Fatalf("ReadHistory: %v", err)
 	}
 	if len(history) != 0 {
-		t.Fatalf("erwarte leeren Verlauf, habe %d", len(history))
+		t.Fatalf("expected empty history, have %d", len(history))
 	}
 }
 
-// Regression: history.jsonl und events.jsonl wuchsen unbegrenzt.
+// Regression: history.jsonl and events.jsonl grew without bound.
 func TestAppendPrunesOldLines(t *testing.T) {
 	st := New(t.TempDir(), 10)
 	if err := st.Ensure(); err != nil {
@@ -143,10 +143,10 @@ func TestAppendPrunesOldLines(t *testing.T) {
 		t.Fatalf("ReadHistory: %v", err)
 	}
 	if len(all) > 11 {
-		t.Fatalf("Rotation greift nicht, %d Zeilen vorhanden", len(all))
+		t.Fatalf("rotation is not kicking in, %d lines present", len(all))
 	}
 	newest := all[len(all)-1]
 	if newest.Temperature != 69 {
-		t.Fatalf("neuester Punkt fehlt, Temperatur = %d", newest.Temperature)
+		t.Fatalf("newest point missing, temperature = %d", newest.Temperature)
 	}
 }

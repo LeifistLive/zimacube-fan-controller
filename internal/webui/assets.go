@@ -4,7 +4,7 @@ package webui
 // Content-Security-Policy no longer needs 'unsafe-inline'. All icons are
 // hand-drawn inline SVG (no icon font, no CDN) to stay inside default-src 'self'.
 const IndexHTML = `<!doctype html>
-<html lang="de">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -26,26 +26,26 @@ const IndexHTML = `<!doctype html>
 </div>
 
 <nav class="side-nav">
-<div class="side-nav-label">Ansicht</div>
+<div class="side-nav-label">View</div>
 <a href="#overview" class="side-link active" data-section="overview">
 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 10h3.2l1.8-5 3 10 2-8 1.5 3H18"/></svg>
 Status
 </a>
 <a href="#control" class="side-link" data-section="control">
 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="17" y2="6"/><circle cx="12" cy="6" r="1.6" fill="currentColor" stroke="none"/><line x1="3" y1="10" x2="17" y2="10"/><circle cx="7" cy="10" r="1.6" fill="currentColor" stroke="none"/><line x1="3" y1="14" x2="17" y2="14"/><circle cx="14" cy="14" r="1.6" fill="currentColor" stroke="none"/></svg>
-Steuerung
+Control
 </a>
 <a href="#history" class="side-link" data-section="history">
 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="16" x2="4" y2="11"/><line x1="10" y1="16" x2="10" y2="6"/><line x1="16" y1="16" x2="16" y2="13"/></svg>
-Verlauf
+History
 </a>
 <a href="#events-section" class="side-link" data-section="events-section">
 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="3.5" cy="6" r="0.9" fill="currentColor" stroke="none"/><line x1="7" y1="6" x2="17" y2="6"/><circle cx="3.5" cy="10" r="0.9" fill="currentColor" stroke="none"/><line x1="7" y1="10" x2="17" y2="10"/><circle cx="3.5" cy="14" r="0.9" fill="currentColor" stroke="none"/><line x1="7" y1="14" x2="17" y2="14"/></svg>
-Ereignisse
+Events
 </a>
 <a href="#config-section" class="side-link" data-section="config-section">
 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3C5.5 3 5 3.8 5 5v2.5c0 1-.4 1.5-1.5 1.5 1.1 0 1.5.5 1.5 1.5V13c0 1.2.5 2 2 2"/><path d="M13 3c1.5 0 2 .8 2 2v2.5c0 1 .4 1.5 1.5 1.5-1.1 0-1.5.5-1.5 1.5V13c0 1.2-.5 2-2 2"/></svg>
-Konfiguration
+Configuration
 </a>
 </nav>
 
@@ -55,9 +55,6 @@ Konfiguration
 <div class="sidebar-footer-title">Controller</div>
 <div class="sidebar-footer-sub" id="sidebarStatus">–</div>
 </div>
-<button type="button" id="logout" class="sidebar-logout" title="Abmelden" aria-label="Abmelden">
-<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4H4.8A1.8 1.8 0 0 0 3 5.8v8.4A1.8 1.8 0 0 0 4.8 16H8"/><path d="M13 6.5 17 10l-4 3.5"/><line x1="17" y1="10" x2="7.5" y2="10"/></svg>
-</button>
 </div>
 </aside>
 
@@ -66,16 +63,19 @@ Konfiguration
 <header class="page-head">
 <div>
 <h1>Dashboard</h1>
-<div class="sub">Live-Überwachung deiner HDD-Lüftersteuerung <span id="version" class="version-badge"></span></div>
+<div class="sub">Live monitoring of your HDD fan control <span id="version" class="version-badge"></span></div>
 </div>
 <div class="head-actions">
-<button type="button" id="themeToggle" class="theme-toggle" title="Hell/Dunkel umschalten" aria-label="Hell/Dunkel umschalten">
+<button type="button" id="themeToggle" class="theme-toggle" title="Toggle light/dark" aria-label="Toggle light/dark">
 <svg class="icon-sun" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="3.2"/><path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.9 4.9l1.4 1.4M13.7 13.7l1.4 1.4M4.9 15.1l1.4-1.4M13.7 6.3l1.4-1.4"/></svg>
 <svg class="icon-moon" viewBox="0 0 20 20" fill="currentColor" stroke="none"><path d="M15.8 12.9A6.2 6.2 0 0 1 7.1 4.2a6.7 6.7 0 1 0 8.7 8.7Z"/></svg>
 </button>
 <button id="refresh" type="button" class="pill-btn pill-primary">
 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.9 10A6.1 6.1 0 0 1 16 6.9"/><path d="M16.1 10A6.1 6.1 0 0 1 4 13.1"/><path d="M16 4v3.3h-3.3"/><path d="M4 16v-3.3h3.3"/></svg>
-Aktualisieren
+Refresh
+</button>
+<button type="button" id="logout" class="theme-toggle" title="Log out" aria-label="Log out">
+<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4H4.8A1.8 1.8 0 0 0 3 5.8v8.4A1.8 1.8 0 0 0 4.8 16H8"/><path d="M13 6.5 17 10l-4 3.5"/><line x1="17" y1="10" x2="7.5" y2="10"/></svg>
 </button>
 </div>
 </header>
@@ -89,18 +89,18 @@ Aktualisieren
 <div class="hero-card">
 <div class="hero-head">
 <span class="icon-box"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="6.5"/><path d="M10 10L10 4.2M10 10L14.7 12.8M10 10L5.3 12.8"/><circle cx="10" cy="10" r="1.3" fill="currentColor" stroke="none"/></svg></span>
-<div><div class="hero-title">Lüfter</div><div class="hero-sub">Sollwert (angeforderter Prozentwert)</div></div>
+<div><div class="hero-title">Fan</div><div class="hero-sub">Target (requested percentage)</div></div>
 </div>
 <div class="hero-value" id="fan">-</div>
 <div class="meter"><div class="meter-fill" id="fanMeter"></div></div>
 <div class="hero-meta"><span id="fanMetaLeft">-</span><span id="fanMetaRight" class="muted"></span></div>
-<div class="muted small" id="fanFeedbackNote">Keine RPM-Rückmeldung vom Controller, nur der zuletzt geschriebene Wert wird angezeigt.</div>
+<div class="muted small" id="fanFeedbackNote">No RPM feedback from the controller; only the last written value is shown.</div>
 </div>
 
 <div class="hero-card">
 <div class="hero-head">
 <span class="icon-box"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 11.2V4.5a1.5 1.5 0 0 0-3 0v6.7a3 3 0 1 0 3 0Z"/><circle cx="10" cy="14" r="1" fill="currentColor" stroke="none"/></svg></span>
-<div><div class="hero-title">Temperatur</div><div class="hero-sub">Maximale HDD-Temperatur</div></div>
+<div><div class="hero-title">Temperature</div><div class="hero-sub">Maximum HDD temperature</div></div>
 </div>
 <div class="hero-value" id="temp">-</div>
 <div class="meter"><div class="meter-fill" id="tempMeter"></div></div>
@@ -110,7 +110,7 @@ Aktualisieren
 <div class="hero-card">
 <div class="hero-head">
 <span class="icon-box"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.5 16 4.8V9.5C16 13.8 13.4 17 10 18 6.6 17 4 13.8 4 9.5V4.8Z"/></svg></span>
-<div><div class="hero-title">Sicherheitsmarge</div><div class="hero-sub">Abstand zur Notfalltemperatur</div></div>
+<div><div class="hero-title">Safety Margin</div><div class="hero-sub">Distance to emergency temperature</div></div>
 </div>
 <div class="hero-value" id="margin">-</div>
 <div class="meter"><div class="meter-fill" id="marginMeter"></div></div>
@@ -133,26 +133,26 @@ Aktualisieren
 <div class="panel">
 <div class="panel-head"><div class="panel-head-title">
 <span class="icon-box"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 11.2V4.5a1.5 1.5 0 0 0-3 0v6.7a3 3 0 1 0 3 0Z"/><circle cx="10" cy="14" r="1" fill="currentColor" stroke="none"/></svg></span>
-<div><h2>Festplatten</h2><div class="muted small">Temperatur je HDD (Cache/SSD ausgeschlossen)</div></div>
+<div><h2>Hard Drives</h2><div class="muted small">Temperature per HDD (cache/SSD excluded)</div></div>
 </div></div>
-<div class="disk-grid" id="diskGrid"><div class="muted small">Keine Festplatten erkannt.</div></div>
+<div class="disk-grid" id="diskGrid"><div class="muted small">No hard drives detected.</div></div>
 </div>
 </section>
 
 <section id="control" class="section">
-<h2 class="section-title">Steuerung</h2>
+<h2 class="section-title">Control</h2>
 <div class="resource-grid">
 
 <div class="panel">
 <div class="panel-head panel-head-row">
 <div class="panel-head-title">
 <span class="icon-box"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3 17 7 10 11 3 7Z"/><path d="M3 11l7 4 7-4"/><path d="M3 15l7 4 7-4"/></svg></span>
-<div><h2>Profile</h2><div class="muted small">Aktives Lüfterprofil wechseln</div></div>
+<div><h2>Profiles</h2><div class="muted small">Switch the active fan profile</div></div>
 </div>
 </div>
 <div class="table-wrap">
 <table>
-<thead><tr><th>Profil</th><th>Boost</th><th>Notfall</th><th>Status</th></tr></thead>
+<thead><tr><th>Profile</th><th>Boost</th><th>Emergency</th><th>Status</th></tr></thead>
 <tbody id="profileTable"></tbody>
 </table>
 </div>
@@ -162,17 +162,17 @@ Aktualisieren
 <div class="panel-head">
 <div class="panel-head-title">
 <span class="icon-box"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="17" y2="6"/><circle cx="12" cy="6" r="1.6" fill="currentColor" stroke="none"/><line x1="3" y1="10" x2="17" y2="10"/><circle cx="7" cy="10" r="1.6" fill="currentColor" stroke="none"/><line x1="3" y1="14" x2="17" y2="14"/><circle cx="14" cy="14" r="1.6" fill="currentColor" stroke="none"/></svg></span>
-<div><h2>Modus &amp; Test</h2><div class="muted small">Automatik, manuell oder Notfall; darunter ein Testlauf</div></div>
+<div><h2>Mode &amp; Test</h2><div class="muted small">Automatic, manual, or emergency; test run below</div></div>
 </div>
 </div>
 <div class="mode-switch" id="modeSwitch">
-<button type="button" class="mode-btn" data-set-mode="automatic">Automatik</button>
-<button type="button" class="mode-btn" data-set-mode="manual">Manuell</button>
-<button type="button" class="mode-btn mode-btn-danger" data-set-mode="emergency">Notfall</button>
+<button type="button" class="mode-btn" data-set-mode="automatic">Automatic</button>
+<button type="button" class="mode-btn" data-set-mode="manual">Manual</button>
+<button type="button" class="mode-btn mode-btn-danger" data-set-mode="emergency">Emergency</button>
 </div>
 <div class="controls-row" id="manualRow" hidden>
 <input id="percent" class="input num-input" type="number" min="1" max="100" value="75">
-<button id="setManual" class="pill-btn pill-primary" type="button">Setzen</button>
+<button id="setManual" class="pill-btn pill-primary" type="button">Set</button>
 </div>
 <div class="controls-row" id="testRow" hidden>
 <span class="muted small">Test</span>
@@ -188,12 +188,12 @@ Aktualisieren
 </section>
 
 <section id="history" class="section">
-<h2 class="section-title">Verlauf</h2>
+<h2 class="section-title">History</h2>
 <div class="chart-grid">
 <div class="panel">
 <div class="panel-head"><div class="panel-head-title">
 <span class="icon-box"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="16" x2="4" y2="11"/><line x1="10" y1="16" x2="10" y2="6"/><line x1="16" y1="16" x2="16" y2="13"/></svg></span>
-<div><h2>Temperatur</h2><div class="muted small">Maximale HDD-Temperatur</div></div>
+<div><h2>Temperature</h2><div class="muted small">Maximum HDD temperature</div></div>
 </div></div>
 <div class="chart-wrap">
 <canvas id="chartTemp" height="220"></canvas>
@@ -203,7 +203,7 @@ Aktualisieren
 <div class="panel">
 <div class="panel-head"><div class="panel-head-title">
 <span class="icon-box"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="16" x2="4" y2="11"/><line x1="10" y1="16" x2="10" y2="6"/><line x1="16" y1="16" x2="16" y2="13"/></svg></span>
-<div><h2>Lüfterdrehzahl</h2><div class="muted small">Geschriebener Prozentwert</div></div>
+<div><h2>Fan Speed</h2><div class="muted small">Written percentage</div></div>
 </div></div>
 <div class="chart-wrap">
 <canvas id="chartFan" height="220"></canvas>
@@ -218,24 +218,29 @@ Aktualisieren
 <div class="panel-head panel-head-row">
 <div class="panel-head-title">
 <span class="icon-box"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="3.5" cy="6" r="0.9" fill="currentColor" stroke="none"/><line x1="7" y1="6" x2="17" y2="6"/><circle cx="3.5" cy="10" r="0.9" fill="currentColor" stroke="none"/><line x1="7" y1="10" x2="17" y2="10"/><circle cx="3.5" cy="14" r="0.9" fill="currentColor" stroke="none"/><line x1="7" y1="14" x2="17" y2="14"/></svg></span>
-<div><h2>Ereignisse</h2><div class="muted small">Verlauf von Modus- und Lüfteränderungen</div></div>
+<div><h2>Events</h2><div class="muted small">History of mode and fan changes</div></div>
 </div>
 <input id="eventFilter" class="input filter-input" type="text" placeholder="Filter...">
 </div>
 <div class="table-wrap">
 <table>
-<thead><tr><th>Zeit</th><th>Typ</th><th>Meldung</th></tr></thead>
+<thead><tr><th>Time</th><th>Type</th><th>Message</th></tr></thead>
 <tbody id="events"></tbody>
 </table>
 </div>
 <div class="table-footer pagination">
 <span class="muted small" id="eventsFooter"></span>
 <div class="pagination-controls">
-<button type="button" class="pill-btn pill-ghost table-action" id="eventsPrev" aria-label="Vorherige Seite">
+<label class="muted small page-size-label" for="eventsPageSize">Per page</label>
+<select id="eventsPageSize" class="input page-size-select">
+<option value="10">10</option>
+<option value="25">25</option>
+</select>
+<button type="button" class="pill-btn pill-ghost table-action" id="eventsPrev" aria-label="Previous page">
 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 6 10l6 6"/></svg>
 </button>
-<span class="muted small" id="eventsPageLabel">Seite 1</span>
-<button type="button" class="pill-btn pill-ghost table-action" id="eventsNext" aria-label="Nächste Seite">
+<span class="muted small" id="eventsPageLabel">Page 1</span>
+<button type="button" class="pill-btn pill-ghost table-action" id="eventsNext" aria-label="Next page">
 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4l6 6-6 6"/></svg>
 </button>
 </div>
@@ -247,12 +252,12 @@ Aktualisieren
 <div class="panel">
 <div class="panel-head"><div class="panel-head-title">
 <span class="icon-box"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3C5.5 3 5 3.8 5 5v2.5c0 1-.4 1.5-1.5 1.5 1.1 0 1.5.5 1.5 1.5V13c0 1.2.5 2 2 2"/><path d="M13 3c1.5 0 2 .8 2 2v2.5c0 1 .4 1.5 1.5 1.5-1.1 0-1.5.5-1.5 1.5V13c0 1.2-.5 2-2 2"/></svg></span>
-<div><h2>Konfiguration</h2><div class="muted small">Profile als JSON bearbeiten</div></div>
+<div><h2>Configuration</h2><div class="muted small">Edit profiles as JSON</div></div>
 </div></div>
 <textarea id="config" class="input config-editor" spellcheck="false"></textarea>
 <div class="controls-row mt">
-<button id="saveConfig" class="pill-btn pill-primary" type="button">Speichern</button>
-<button id="reloadConfig" class="pill-btn" type="button">Verwerfen und neu laden</button>
+<button id="saveConfig" class="pill-btn pill-primary" type="button">Save</button>
+<button id="reloadConfig" class="pill-btn" type="button">Discard and reload</button>
 </div>
 </div>
 </section>
@@ -269,11 +274,11 @@ Aktualisieren
 // small login.js instead; the strict script-src (inherited from default-src
 // 'self', see securityHeaders) rules out an inline <script> here.
 const LoginHTML = `<!doctype html>
-<html lang="de">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Anmelden – ZimaCube Fan Controller</title>
+<title>Login – ZimaCube Fan Controller</title>
 <link rel="stylesheet" href="/app.css">
 </head>
 <body class="login-body">
@@ -283,12 +288,12 @@ const LoginHTML = `<!doctype html>
 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="6.5"/><path d="M10 10L10 4.2M10 10L14.7 12.8M10 10L5.3 12.8"/><circle cx="10" cy="10" r="1.3" fill="currentColor" stroke="none"/></svg>
 </span>
 <h1 class="login-title">ZimaCube Fan Controller</h1>
-<div class="muted small login-sub">Bitte anmelden</div>
-<label class="login-label" for="loginUser">Benutzername</label>
+<div class="muted small login-sub">Please log in</div>
+<label class="login-label" for="loginUser">Username</label>
 <input id="loginUser" class="input login-input" type="text" autocomplete="username" required>
-<label class="login-label" for="loginPassword">Passwort</label>
+<label class="login-label" for="loginPassword">Password</label>
 <input id="loginPassword" class="input login-input" type="password" autocomplete="current-password" required>
-<button type="submit" class="pill-btn pill-primary login-submit">Anmelden</button>
+<button type="submit" class="pill-btn pill-primary login-submit">Log In</button>
 <div class="login-error" id="loginError" hidden></div>
 </form>
 </div>
@@ -313,7 +318,7 @@ document.getElementById("loginForm").addEventListener("submit", async function (
       return;
     }
     var body = await response.json().catch(function () { return {}; });
-    errorBox.textContent = body.error || "Anmeldung fehlgeschlagen.";
+    errorBox.textContent = body.error || "Login failed.";
     errorBox.hidden = false;
   } catch (error) {
     errorBox.textContent = String(error);
@@ -405,13 +410,6 @@ border-radius:4px;font-weight:650;
 .sidebar-footer{margin-top:auto;display:flex;align-items:center;gap:10px;padding:14px 10px 4px;border-top:1px solid var(--border)}
 .sidebar-footer-title{font-size:.8rem;font-weight:650}
 .sidebar-footer-sub{font-size:.72rem;color:var(--text-muted)}
-.sidebar-logout{
-margin-left:auto;width:30px;height:30px;border-radius:8px;flex:0 0 auto;
-border:1px solid transparent;background:transparent;color:var(--text-dim);
-display:flex;align-items:center;justify-content:center;cursor:pointer;
-}
-.sidebar-logout svg{width:16px;height:16px}
-.sidebar-logout:hover{background:var(--card-2);color:var(--red);border-color:var(--border-soft)}
 
 .content{flex:1;min-width:0;padding:26px 32px 60px;display:flex;flex-direction:column;gap:26px}
 
@@ -579,10 +577,12 @@ tbody tr:hover{background:var(--card-2)}
 tbody tr:last-child td{border-bottom:none}
 .table-footer{padding:10px 2px 0}
 .pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
-.pagination-controls{display:flex;align-items:center;gap:8px}
+.pagination-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .pagination-controls .table-action{padding:6px 9px}
 .pagination-controls .table-action svg{width:14px;height:14px}
 .pagination-controls .table-action:disabled{opacity:.4;cursor:default;pointer-events:none}
+.page-size-label{margin-left:4px}
+.page-size-select{width:64px;padding:6px 8px}
 #eventsPageLabel{min-width:70px;text-align:center}
 
 .config-editor{width:100%;min-height:220px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.82rem;resize:vertical}
@@ -607,14 +607,23 @@ padding:32px 28px;text-align:center;
 .shell{flex-direction:column}
 .sidebar{
 width:100%;flex:0 0 auto;height:auto;position:relative;
-flex-direction:row;align-items:center;gap:18px;padding:14px 16px;overflow-x:auto;
+flex-direction:row;align-items:center;gap:14px;padding:14px 16px;overflow-x:auto;
 }
-.brand{padding:0}
-.side-nav{flex-direction:row;margin-top:0}
+.brand{padding:0;flex:0 0 auto}
+.side-nav{flex-direction:row;margin-top:0;flex:0 0 auto}
 .side-nav-label{display:none}
 .side-link{white-space:nowrap}
+/* Purely informational (the same online/offline state is already visible
+   on the Status page), so hiding it to save space is fine here - unlike
+   logout, which now lives in the page header instead and stays reachable
+   on every screen size regardless. */
 .sidebar-footer{display:none}
 .content{padding:18px 16px 40px}
+}
+
+@media (max-width:480px){
+.mode-btn{padding:9px 6px;font-size:.78rem}
+.filter-input{width:100%}
 }`
 
 const ScriptJS = `"use strict";
@@ -625,8 +634,8 @@ var lastEvents = [];
 var lastProfiles = [];
 var activeProfileName = "";
 var activeEmergencyTemp = 52;
-// Set to "manual" while the operator has opened the Manuell view locally but
-// not yet clicked "Setzen" (so the server override is not "manual" yet). See
+// Set to "manual" while the operator has opened the Manual view locally but
+// not yet clicked "Set" (so the server override is not "manual" yet). See
 // effectiveMode(): this is what keeps the highlighted button and the
 // manual/test rows from disagreeing with each other.
 var localModeOverride = null;
@@ -673,7 +682,7 @@ function fetchWithTimeout(url, options, timeoutMs) {
 
 async function getJSON(url) {
   var response = await fetchWithTimeout(url, { cache: "no-store" });
-  if (response.status === 401) { window.location.href = "/login"; throw new Error("nicht angemeldet"); }
+  if (response.status === 401) { window.location.href = "/login"; throw new Error("not logged in"); }
   var text = await response.text();
   if (!response.ok) { throw new Error(response.status + ": " + text); }
   return JSON.parse(text);
@@ -686,7 +695,7 @@ async function describeResponse(response) {
   var parsed = null;
   try { parsed = JSON.parse(text); } catch (error) { /* not JSON, fall through */ }
   if (parsed && parsed.error) { return parsed.error; }
-  if (response.ok) { return "Erledigt."; }
+  if (response.ok) { return "Done."; }
   return response.status + ": " + text;
 }
 
@@ -710,8 +719,8 @@ async function post(path, body) {
 function setBanner(status) {
   var banner = byId("banner");
   var problems = [];
-  if (!status.controller_online) { problems.push("I2C-Controller nicht erreichbar"); }
-  if (!status.temperature_valid) { problems.push("HDD-Temperatur nicht lesbar, Sicherheitsdrehzahl aktiv"); }
+  if (!status.controller_online) { problems.push("I2C controller unreachable"); }
+  if (!status.temperature_valid) { problems.push("HDD temperature unreadable, safety speed active"); }
   if (status.last_error) { problems.push(status.last_error); }
   if (problems.length === 0) { banner.hidden = true; banner.textContent = ""; return; }
   banner.hidden = false;
@@ -720,11 +729,11 @@ function setBanner(status) {
 
 function labelForMode(mode) {
   switch (mode) {
-    case "automatic": return "Automatik";
-    case "manual": return "Manuell";
-    case "emergency": return "Notfall";
-    case "array-boost": return "Array-Boost";
-    case "failsafe": return "Sicherheitsmodus";
+    case "automatic": return "Automatic";
+    case "manual": return "Manual";
+    case "emergency": return "Emergency";
+    case "array-boost": return "Array Boost";
+    case "failsafe": return "Failsafe";
     default: return mode || "-";
   }
 }
@@ -771,13 +780,13 @@ async function refreshStatus() {
 
   byId("fan").textContent = status.target_percent + " %";
   byId("fanMeter").style.width = clampPct(status.target_percent) + "%";
-  var appliedText = "Ist: " + status.last_applied_percent + " %";
-  if (!status.last_write_successful) { appliedText += " (letzter Schreibversuch fehlgeschlagen)"; }
+  var appliedText = "Actual: " + status.last_applied_percent + " %";
+  if (!status.last_write_successful) { appliedText += " (last write attempt failed)"; }
   byId("fanMetaLeft").textContent = appliedText;
   byId("fanMetaRight").textContent = labelForMode(status.mode);
 
   var tempRatio = status.temperature_valid ? clampPct(Math.round((status.maximum_disk_temperature / activeEmergencyTemp) * 100)) : null;
-  byId("temp").textContent = status.temperature_valid ? status.maximum_disk_temperature + " °C" : "unbekannt";
+  byId("temp").textContent = status.temperature_valid ? status.maximum_disk_temperature + " °C" : "unknown";
   var tempMeter = byId("tempMeter");
   var marginMeter = byId("marginMeter");
   if (tempRatio === null) {
@@ -794,12 +803,12 @@ async function refreshStatus() {
     var margin = clampPct(100 - tempRatio);
     marginMeter.style.width = margin + "%";
     marginMeter.className = "meter-fill " + levelClass(tempRatio);
-    byId("tempMetaLeft").textContent = tempRatio + " % von " + activeEmergencyTemp + " °C";
+    byId("tempMetaLeft").textContent = tempRatio + " % of " + activeEmergencyTemp + " °C";
     byId("margin").textContent = margin + " %";
     byId("marginMetaLeft").textContent = margin + " %";
   }
   byId("tempMetaRight").textContent = status.disks_reporting + " HDD" + (status.disks_reporting === 1 ? "" : "s");
-  byId("marginMetaRight").textContent = "Grenze " + activeEmergencyTemp + " °C";
+  byId("marginMetaRight").textContent = "Limit " + activeEmergencyTemp + " °C";
 
   byId("modeBadge").textContent = labelForMode(status.mode);
   byId("modeBadge").className = "badge " + badgeClassForMode(status.mode);
@@ -809,8 +818,8 @@ async function refreshStatus() {
   metaContainer.textContent = "";
   metaSpan(metaContainer, "Bus " + (status.i2c_bus !== undefined ? status.i2c_bus : "-"));
   metaSpan(metaContainer, status.i2c_address || "-");
-  metaSpan(metaContainer, "Laufzeit " + formatUptime(status.uptime_seconds));
-  metaSpan(metaContainer, "Array: " + (status.array_operation && status.array_operation !== "none" ? status.array_operation : "inaktiv"));
+  metaSpan(metaContainer, "Uptime " + formatUptime(status.uptime_seconds));
+  metaSpan(metaContainer, "Array: " + (status.array_operation && status.array_operation !== "none" ? status.array_operation : "inactive"));
 
   byId("controller").textContent = status.controller_online ? "online" : "offline";
   byId("controllerDot").className = "dot " + (status.controller_online ? "dot-ok" : "dot-bad");
@@ -832,7 +841,7 @@ function renderDiskGrid(disks) {
   if (!disks || disks.length === 0) {
     var empty = document.createElement("div");
     empty.className = "muted small";
-    empty.textContent = "Keine Festplatten erkannt.";
+    empty.textContent = "No hard drives detected.";
     grid.appendChild(empty);
     return;
   }
@@ -860,9 +869,9 @@ function renderDiskGrid(disks) {
 }
 
 // Reconciles the server's override state with a locally opened-but-not-yet-
-// committed Manuell view: a bare status poll reporting "automatic" must not
+// committed Manual view: a bare status poll reporting "automatic" must not
 // yank the view away while the operator is still typing a percent, but a
-// genuinely different committed override (e.g. Notfall set from another
+// genuinely different committed override (e.g. Emergency set from another
 // tab) must win over a stale local click.
 function effectiveMode(serverMode) {
   if (localModeOverride === "manual") {
@@ -914,13 +923,13 @@ function renderProfileTable() {
       var badge = document.createElement("span");
       badge.className = "badge badge-green";
       badge.style.marginLeft = "0";
-      badge.textContent = "Aktiv";
+      badge.textContent = "Active";
       statusTd.appendChild(badge);
     } else {
       var button = document.createElement("button");
       button.type = "button";
       button.className = "pill-btn pill-ghost table-action";
-      button.textContent = "Aktivieren";
+      button.textContent = "Activate";
       button.addEventListener("click", function () {
         post("/api/profile/" + encodeURIComponent(profile.id));
       });
@@ -951,7 +960,11 @@ async function refreshConfig(force) {
   renderProfileTable();
 }
 
-var eventsPageSize = 10;
+var eventsPageSizeKey = "zimafan-events-page-size";
+var validEventsPageSizes = [10, 25];
+var eventsPageSize = validEventsPageSizes.indexOf(parseInt(localStorage.getItem(eventsPageSizeKey), 10)) !== -1
+  ? parseInt(localStorage.getItem(eventsPageSizeKey), 10)
+  : 10;
 var eventsPage = 0;
 
 // Rows are built with DOM nodes instead of innerHTML, because event messages
@@ -984,8 +997,8 @@ function renderEvents() {
 
   var shownFrom = filtered.length === 0 ? 0 : start + 1;
   var shownTo = Math.min(start + eventsPageSize, filtered.length);
-  byId("eventsFooter").textContent = "Zeige " + shownFrom + "–" + shownTo + " von " + filtered.length + " Ereignissen";
-  byId("eventsPageLabel").textContent = "Seite " + (eventsPage + 1) + " von " + pageCount;
+  byId("eventsFooter").textContent = "Showing " + shownFrom + "–" + shownTo + " of " + filtered.length + " events";
+  byId("eventsPageLabel").textContent = "Page " + (eventsPage + 1) + " of " + pageCount;
   byId("eventsPrev").disabled = eventsPage <= 0;
   byId("eventsNext").disabled = eventsPage >= pageCount - 1;
 }
@@ -1015,7 +1028,7 @@ function drawArea(canvas, points, valueKey, color, minFloor, maxFloor, suffix) {
 
   if (!points || points.length < 2) {
     ctx.fillStyle = "#6d6d80";
-    ctx.fillText("Noch keine Messpunkte", 12, height / 2);
+    ctx.fillText("No data points yet", 12, height / 2);
     canvas._tooltip = null;
     return;
   }
@@ -1122,7 +1135,7 @@ async function saveConfig() {
   try {
     parsed = JSON.parse(byId("config").value);
   } catch (error) {
-    say("Ungueltiges JSON: " + error.message);
+    say("Invalid JSON: " + error.message);
     return;
   }
   if (await post("/api/config", parsed)) { configDirty = false; }
@@ -1207,6 +1220,14 @@ function wire() {
   byId("reloadConfig").addEventListener("click", function () { refreshConfig(true); });
   byId("config").addEventListener("input", function () { configDirty = true; });
   byId("eventFilter").addEventListener("input", function () {
+    eventsPage = 0;
+    renderEvents();
+  });
+  byId("eventsPageSize").value = String(eventsPageSize);
+  byId("eventsPageSize").addEventListener("change", function () {
+    var chosen = parseInt(byId("eventsPageSize").value, 10);
+    eventsPageSize = validEventsPageSizes.indexOf(chosen) !== -1 ? chosen : 10;
+    localStorage.setItem(eventsPageSizeKey, String(eventsPageSize));
     eventsPage = 0;
     renderEvents();
   });

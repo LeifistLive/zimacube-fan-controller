@@ -3,34 +3,33 @@ services:
     build:
       context: .
       args:
-        # Leer lassen: das Dockerfile faellt dann auf die VERSION-Datei im
-        # Repo zurueck. Nur setzen, um eine andere Versionsnummer zu erzwingen.
+        # Leave empty: the Dockerfile then falls back to the VERSION file in
+        # the repo. Only set this to force a different version number.
         VERSION: "${VERSION:-}"
 
     image: zimacube-fan-controller:local
     container_name: zimacube-fan-controller
     restart: unless-stopped
 
-    # ApplySafeState braucht bis zu ~10s fuer den I2C-Schreibversuch beim
-    # Beenden; Dockers Default (10s) liesse dafuer kaum Luft.
+    # ApplySafeState needs up to ~10s for the I2C write attempt on
+    # shutdown; Docker's default (10s) would leave barely any room for that.
     stop_grace_period: 20s
 
     devices:
-      # Busnummer und I2C_BUS muessen zusammenpassen, daher dieselbe Variable.
+      # The bus number and I2C_BUS must match, hence the same variable.
       - "/dev/i2c-${I2C_BUS:-0}:/dev/i2c-${I2C_BUS:-0}:rwm"
 
     volumes:
-      # Das ganze Verzeichnis einbinden, nicht einzelne Dateien: emhttp
-      # schreibt var.ini und disks.ini neu, ein Single-File-Mount zeigt danach
-      # dauerhaft auf den alten Inode und die Temperaturen frieren ein.
+      # Mount the whole directory, not individual files: emhttp rewrites
+      # var.ini and disks.ini, and a single-file mount would then keep
+      # pointing at the old inode forever, freezing the temperatures.
       - /var/local/emhttp:/var/local/emhttp:ro
-      # Absichtlich ein benanntes Docker-Volume (liegt bei Unraid auf dem
-      # Docker-Datenspeicher, i.d.R. Cache/Boot) statt eines Bind-Mounts nach
+      # Deliberately a named Docker volume (on Unraid this lives on the
+      # Docker data store, usually cache/boot) instead of a bind mount to
       # /mnt/user/... : config.json/override.json/history.jsonl/events.jsonl
-      # werden regelmaessig geschrieben (Verlauf alle HISTORY_INTERVAL_SECONDS,
-      # Standard 5 Min.). Auf einer Array-Platte wuerde das eine im Standby
-      # befindliche Platte periodisch aufwecken. Nicht auf eine Array-Platte
-      # umbiegen.
+      # are written regularly (history every HISTORY_INTERVAL_SECONDS,
+      # default 5 min). On an array disk this would periodically wake a
+      # disk that is in standby. Do not redirect this to an array disk.
       - fan-data:/data
 
     environment:
@@ -44,22 +43,21 @@ services:
       HISTORY_INTERVAL_SECONDS: "${HISTORY_INTERVAL_SECONDS:-300}"
       DETECT_INTERVAL_SECONDS: "${DETECT_INTERVAL_SECONDS:-300}"
 
-      # Schreibt die aktuelle PWM auch ohne Wertaenderung erneut, damit ein
-      # Reset des Backplane-Controllers nicht dauerhaft unbemerkt bleibt.
+      # Rewrites the current PWM even without a value change, so a reset of
+      # the backplane controller does not go permanently unnoticed.
       REAPPLY_INTERVAL_SECONDS: "${REAPPLY_INTERVAL_SECONDS:-300}"
 
-      # Obergrenze fuer history.jsonl und events.jsonl (Zeilen je Datei).
+      # Upper bound for history.jsonl and events.jsonl (lines per file).
       MAX_LOG_LINES: "${MAX_LOG_LINES:-20000}"
 
-      # Drehzahl, die beim Beenden gesetzt wird. 0 laesst den letzten Wert stehen.
+      # Speed set on shutdown. 0 leaves the last value in place.
       SAFE_SHUTDOWN_PERCENT: "${SAFE_SHUTDOWN_PERCENT:-0}"
 
       LISTEN_ADDRESS: "0.0.0.0:8080"
 
-      # Ohne ADMIN_PASSWORD ist der Login deaktiviert und das gesamte
-      # Dashboard offen erreichbar - unbedingt setzen, sobald es im LAN
-      # erreichbar ist. Wird auch von fanctl (docker exec) zum Einloggen
-      # verwendet.
+      # Without ADMIN_PASSWORD the login is disabled and the whole
+      # dashboard is openly reachable - be sure to set this once it is
+      # reachable on the LAN. Also used by fanctl (docker exec) to log in.
       ADMIN_USER: "${ADMIN_USER:-admin}"
       ADMIN_PASSWORD: "${ADMIN_PASSWORD:-}"
 
@@ -77,6 +75,9 @@ services:
     tmpfs:
       - /tmp:size=2m,nosuid,nodev,noexec
 
+    # Fully overrides the HEALTHCHECK from the Dockerfile (this is
+    # intentional: Compose deployments may adjust the values here without
+    # rebuilding the image). Keep both places in sync when changing this.
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/api/health"]
       interval: 30s

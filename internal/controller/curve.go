@@ -40,15 +40,15 @@ func ParseCurve(raw string) (Curve, error) {
 		}
 		fields := strings.Split(part, ":")
 		if len(fields) != 2 {
-			return nil, fmt.Errorf("ungültiger Kurvenpunkt %q", part)
+			return nil, fmt.Errorf("invalid curve point %q", part)
 		}
 		temperature, err := strconv.Atoi(strings.TrimSpace(fields[0]))
 		if err != nil {
-			return nil, fmt.Errorf("ungültige Temperatur in %q", part)
+			return nil, fmt.Errorf("invalid temperature in %q", part)
 		}
 		percent, err := strconv.Atoi(strings.TrimSpace(fields[1]))
 		if err != nil {
-			return nil, fmt.Errorf("ungültiger Prozentwert in %q", part)
+			return nil, fmt.Errorf("invalid percentage in %q", part)
 		}
 		curve = append(curve, Point{Temperature: temperature, Percent: percent})
 	}
@@ -62,7 +62,7 @@ func ParseCurve(raw string) (Curve, error) {
 // points being sorted and monotonic.
 func (c Curve) Normalized() (Curve, error) {
 	if len(c) == 0 {
-		return nil, errors.New("Lüfterkurve ist leer")
+		return nil, errors.New("fan curve is empty")
 	}
 
 	out := make(Curve, len(c))
@@ -73,21 +73,21 @@ func (c Curve) Normalized() (Curve, error) {
 
 	for index, point := range out {
 		if point.Percent < MinPercent || point.Percent > MaxPercent {
-			return nil, fmt.Errorf("Prozentwert %d bei %d Grad liegt nicht zwischen %d und %d",
+			return nil, fmt.Errorf("percentage %d at %d degrees is not between %d and %d",
 				point.Percent, point.Temperature, MinPercent, MaxPercent)
 		}
 		if point.Temperature < minTemperature || point.Temperature > maxTemperature {
-			return nil, fmt.Errorf("Temperatur %d Grad liegt nicht zwischen %d und %d",
+			return nil, fmt.Errorf("temperature %d degrees is not between %d and %d",
 				point.Temperature, minTemperature, maxTemperature)
 		}
 		if index == 0 {
 			continue
 		}
 		if point.Temperature == out[index-1].Temperature {
-			return nil, fmt.Errorf("doppelte Temperatur %d Grad", point.Temperature)
+			return nil, fmt.Errorf("duplicate temperature %d degrees", point.Temperature)
 		}
 		if point.Percent < out[index-1].Percent {
-			return nil, fmt.Errorf("Prozentwert fällt von %d auf %d bei steigender Temperatur %d Grad",
+			return nil, fmt.Errorf("percentage drops from %d to %d as temperature rises to %d degrees",
 				out[index-1].Percent, point.Percent, point.Temperature)
 		}
 	}
