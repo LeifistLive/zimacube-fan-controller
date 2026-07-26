@@ -1,5 +1,29 @@
 # Changelog
 
+## 4.1.1
+
+### Behoben
+
+- Nach Klick auf "Manuell" ohne anschließendes "Setzen" hob der nächste
+  Status-Poll wieder "Automatik" hervor, während Prozent-Eingabe und
+  Testknöpfe trotzdem sichtbar blieben (Button und Zeilen liefen über
+  getrennten Zustand auseinander). Beide werden jetzt aus demselben Wert
+  abgeleitet, können also nicht mehr auseinanderlaufen; ein echter,
+  anderswo gesetzter Override (z. B. Notfall) überschreibt eine offene,
+  aber nie bestätigte Manuell-Ansicht weiterhin korrekt.
+
+## 4.1.0
+
+### Neu und verbessert
+
+- Jeder Sidebar-Punkt (Status, Steuerung, Verlauf, Ereignisse, Konfiguration)
+  ist jetzt eine eigene Seite: nur der ausgewählte Bereich ist sichtbar,
+  statt alle fünf untereinander durchzuscrollen. Navigation läuft über den
+  URL-Hash, Browser-Vor/Zurück funktioniert
+- Die Ereignisliste zeigt nur noch 10 Einträge gleichzeitig, mit
+  Vorherige/Nächste-Pfeilen und Seitenanzeige darunter (ähnlich der
+  Log-Ansicht in Portainer); ein Filter setzt die Seite zurück auf 1
+
 ## 4.0.2
 
 ### Behoben

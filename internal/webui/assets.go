@@ -228,7 +228,18 @@ Aktualisieren
 <tbody id="events"></tbody>
 </table>
 </div>
-<div class="table-footer muted small" id="eventsFooter"></div>
+<div class="table-footer pagination">
+<span class="muted small" id="eventsFooter"></span>
+<div class="pagination-controls">
+<button type="button" class="pill-btn pill-ghost table-action" id="eventsPrev" aria-label="Vorherige Seite">
+<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4 6 10l6 6"/></svg>
+</button>
+<span class="muted small" id="eventsPageLabel">Seite 1</span>
+<button type="button" class="pill-btn pill-ghost table-action" id="eventsNext" aria-label="Nächste Seite">
+<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4l6 6-6 6"/></svg>
+</button>
+</div>
+</div>
 </div>
 </section>
 
@@ -469,7 +480,11 @@ margin:0;padding:12px 16px;border-radius:12px;
 border:1px solid rgba(239,68,68,.35);background:rgba(239,68,68,.1);color:#fca5a5;
 }
 
-.section{display:flex;flex-direction:column;gap:14px;scroll-margin-top:20px}
+/* Each section is its own "page": the sidebar switches which one is
+   .active instead of scrolling a single long page (see showSection in
+   app.js). */
+.section{display:none;flex-direction:column;gap:14px}
+.section.active{display:flex}
 .section-title{font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-dim);font-weight:650}
 
 .hero-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
@@ -557,6 +572,12 @@ td{padding:10px;border-bottom:1px solid var(--border);color:var(--text)}
 tbody tr:hover{background:var(--card-2)}
 tbody tr:last-child td{border-bottom:none}
 .table-footer{padding:10px 2px 0}
+.pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.pagination-controls{display:flex;align-items:center;gap:8px}
+.pagination-controls .table-action{padding:6px 9px}
+.pagination-controls .table-action svg{width:14px;height:14px}
+.pagination-controls .table-action:disabled{opacity:.4;cursor:default;pointer-events:none}
+#eventsPageLabel{min-width:70px;text-align:center}
 
 .config-editor{width:100%;min-height:220px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.82rem;resize:vertical}
 
@@ -598,7 +619,11 @@ var lastEvents = [];
 var lastProfiles = [];
 var activeProfileName = "";
 var activeEmergencyTemp = 52;
-var manualRowOpen = false;
+// Set to "manual" while the operator has opened the Manuell view locally but
+// not yet clicked "Setzen" (so the server override is not "manual" yet). See
+// effectiveMode(): this is what keeps the highlighted button and the
+// manual/test rows from disagreeing with each other.
+var localModeOverride = null;
 var messageTimer = null;
 
 function applyTheme(theme) {
@@ -817,21 +842,37 @@ function renderDiskGrid(disks) {
   });
 }
 
-// The segmented mode control reflects the requested override (empty/"" means
-// automatic), not the resulting live status.mode, which can show
-// "array-boost"/"failsafe" from safety logic while the operator's own choice
-// is still "automatic". The manual/test rows belong only to "Manuell": they
-// stay hidden for Automatik and Notfall, and once opened for Manuell they
-// stay open until the operator picks a different mode, so mid-typing they do
-// not vanish on the next 3s status poll.
-function applyModeState(overrideMode) {
-  var mode = overrideMode || "automatic";
-  if (mode === "manual") { manualRowOpen = true; }
+// Reconciles the server's override state with a locally opened-but-not-yet-
+// committed Manuell view: a bare status poll reporting "automatic" must not
+// yank the view away while the operator is still typing a percent, but a
+// genuinely different committed override (e.g. Notfall set from another
+// tab) must win over a stale local click.
+function effectiveMode(serverMode) {
+  if (localModeOverride === "manual") {
+    if (serverMode === "" || serverMode === "manual") { return "manual"; }
+    localModeOverride = null;
+  }
+  return serverMode || "automatic";
+}
+
+// Both the highlighted button and the manual/test rows are driven by this
+// one mode value, so they can never disagree with each other the way a
+// separately tracked "is the row open" flag could.
+function setModeUI(mode) {
   document.querySelectorAll(".mode-btn").forEach(function (btn) {
     btn.classList.toggle("active", btn.dataset.setMode === mode);
   });
-  byId("manualRow").hidden = !manualRowOpen;
-  byId("testRow").hidden = !manualRowOpen;
+  var showExtra = mode === "manual";
+  byId("manualRow").hidden = !showExtra;
+  byId("testRow").hidden = !showExtra;
+}
+
+// The segmented mode control reflects the requested override (empty/"" means
+// automatic), not the resulting live status.mode, which can show
+// "array-boost"/"failsafe" from safety logic while the operator's own choice
+// is still "automatic".
+function applyModeState(overrideMode) {
+  setModeUI(effectiveMode(overrideMode));
 }
 
 function renderProfileTable() {
@@ -893,17 +934,28 @@ async function refreshConfig(force) {
   renderProfileTable();
 }
 
+var eventsPageSize = 10;
+var eventsPage = 0;
+
 // Rows are built with DOM nodes instead of innerHTML, because event messages
 // contain values from var.ini and from user defined profile names.
 function renderEvents() {
   var query = byId("eventFilter").value.trim().toLowerCase();
+  var filtered = lastEvents.slice().reverse().filter(function (event) {
+    var haystack = (String(event.type) + " " + String(event.message)).toLowerCase();
+    return !query || haystack.indexOf(query) !== -1;
+  });
+
+  var pageCount = Math.max(1, Math.ceil(filtered.length / eventsPageSize));
+  if (eventsPage >= pageCount) { eventsPage = pageCount - 1; }
+  if (eventsPage < 0) { eventsPage = 0; }
+
+  var start = eventsPage * eventsPageSize;
+  var pageItems = filtered.slice(start, start + eventsPageSize);
+
   var body = byId("events");
   body.textContent = "";
-  var shown = 0;
-  lastEvents.slice().reverse().forEach(function (event) {
-    var haystack = (String(event.type) + " " + String(event.message)).toLowerCase();
-    if (query && haystack.indexOf(query) === -1) { return; }
-    shown++;
+  pageItems.forEach(function (event) {
     var tr = document.createElement("tr");
     [new Date(event.time).toLocaleString(), event.type, event.message].forEach(function (cell) {
       var td = document.createElement("td");
@@ -912,11 +964,17 @@ function renderEvents() {
     });
     body.appendChild(tr);
   });
-  byId("eventsFooter").textContent = "Zeige " + shown + " von " + lastEvents.length + " Ereignissen";
+
+  var shownFrom = filtered.length === 0 ? 0 : start + 1;
+  var shownTo = Math.min(start + eventsPageSize, filtered.length);
+  byId("eventsFooter").textContent = "Zeige " + shownFrom + "–" + shownTo + " von " + filtered.length + " Ereignissen";
+  byId("eventsPageLabel").textContent = "Seite " + (eventsPage + 1) + " von " + pageCount;
+  byId("eventsPrev").disabled = eventsPage <= 0;
+  byId("eventsNext").disabled = eventsPage >= pageCount - 1;
 }
 
 async function refreshEvents() {
-  lastEvents = await getJSON("/api/events?limit=80");
+  lastEvents = await getJSON("/api/events?limit=200");
   renderEvents();
 }
 
@@ -1061,24 +1119,29 @@ async function refreshAll() {
   }
 }
 
-function setupSectionObserver() {
-  if (!("IntersectionObserver" in window)) { return; }
-  var links = Array.prototype.slice.call(document.querySelectorAll(".side-link"));
-  var sections = links
-    .map(function (link) { return document.getElementById(link.dataset.section); })
-    .filter(function (section) { return Boolean(section); });
-  if (sections.length === 0) { return; }
+var sectionIds = ["overview", "control", "history", "events-section", "config-section"];
 
-  var observer = new IntersectionObserver(function (entries) {
-    entries.forEach(function (entry) {
-      if (!entry.isIntersecting) { return; }
-      links.forEach(function (link) { link.classList.remove("active"); });
-      var match = links.filter(function (link) { return link.dataset.section === entry.target.id; })[0];
-      if (match) { match.classList.add("active"); }
-    });
-  }, { rootMargin: "-15% 0px -70% 0px", threshold: 0 });
+// Each sidebar entry is its own page: exactly one section is visible at a
+// time (see the .section/.section.active rule in app.css) instead of one
+// long page the old IntersectionObserver scroll-spy highlighted as you
+// scrolled past it.
+function showSection(id) {
+  if (sectionIds.indexOf(id) === -1) { id = sectionIds[0]; }
+  sectionIds.forEach(function (sectionId) {
+    var section = byId(sectionId);
+    if (section) { section.classList.toggle("active", sectionId === id); }
+  });
+  document.querySelectorAll(".side-link").forEach(function (link) {
+    link.classList.toggle("active", link.dataset.section === id);
+  });
+}
 
-  sections.forEach(function (section) { observer.observe(section); });
+function setupNavigation() {
+  var initial = window.location.hash.replace("#", "");
+  showSection(initial || sectionIds[0]);
+  window.addEventListener("hashchange", function () {
+    showSection(window.location.hash.replace("#", ""));
+  });
 }
 
 function wireChartTooltip(canvasId, tooltipId) {
@@ -1102,16 +1165,13 @@ function wire() {
     btn.addEventListener("click", function () {
       var mode = btn.dataset.setMode;
       if (mode === "manual") {
-        manualRowOpen = true;
-        byId("manualRow").hidden = false;
-        byId("testRow").hidden = false;
-        document.querySelectorAll(".mode-btn").forEach(function (b) { b.classList.toggle("active", b === btn); });
+        localModeOverride = "manual";
+        setModeUI("manual");
         byId("percent").focus();
         return;
       }
-      manualRowOpen = false;
-      byId("manualRow").hidden = true;
-      byId("testRow").hidden = true;
+      localModeOverride = null;
+      setModeUI(mode);
       post(mode === "emergency" ? "/api/mode/emergency" : "/api/mode/auto");
     });
   });
@@ -1123,7 +1183,18 @@ function wire() {
   byId("saveConfig").addEventListener("click", saveConfig);
   byId("reloadConfig").addEventListener("click", function () { refreshConfig(true); });
   byId("config").addEventListener("input", function () { configDirty = true; });
-  byId("eventFilter").addEventListener("input", renderEvents);
+  byId("eventFilter").addEventListener("input", function () {
+    eventsPage = 0;
+    renderEvents();
+  });
+  byId("eventsPrev").addEventListener("click", function () {
+    eventsPage--;
+    renderEvents();
+  });
+  byId("eventsNext").addEventListener("click", function () {
+    eventsPage++;
+    renderEvents();
+  });
 
   document.querySelectorAll("[data-test]").forEach(function (button) {
     button.addEventListener("click", function () {
@@ -1135,7 +1206,7 @@ function wire() {
   wireChartTooltip("chartFan", "chartFanTooltip");
 
   window.addEventListener("resize", function () { refreshHistory(); });
-  setupSectionObserver();
+  setupNavigation();
 
   refreshAll();
   setInterval(refreshStatus, 3000);
