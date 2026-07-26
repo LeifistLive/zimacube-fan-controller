@@ -207,11 +207,11 @@ func (a *App) handleConfigUpdate(w http.ResponseWriter, r *http.Request) {
 	defer a.configMu.Unlock()
 
 	if err := a.store.SaveJSON(configFile, normalized); err != nil {
-		a.setStorageOK(false)
+		a.setStorageOK(storageConfig, false)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	a.setStorageOK(true)
+	a.setStorageOK(storageConfig, true)
 
 	a.mu.Lock()
 	a.runtime = normalized
@@ -270,11 +270,11 @@ func (a *App) handleProfile(w http.ResponseWriter, r *http.Request) {
 	candidate.ActiveProfile = name
 
 	if err := a.store.SaveJSON(configFile, candidate); err != nil {
-		a.setStorageOK(false)
+		a.setStorageOK(storageConfig, false)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	a.setStorageOK(true)
+	a.setStorageOK(storageConfig, true)
 
 	a.mu.Lock()
 	a.runtime.ActiveProfile = name
@@ -358,7 +358,7 @@ func (a *App) setOverride(value Override) error {
 	} else {
 		err = a.store.SaveJSON(overrideFile, value)
 	}
-	a.setStorageOK(err == nil)
+	a.setStorageOK(storageOverride, err == nil)
 	if err != nil {
 		return err
 	}

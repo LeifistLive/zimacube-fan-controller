@@ -26,19 +26,24 @@ const (
 )
 
 type Config struct {
-	I2CBus              int
-	I2CAddress          string
-	I2CTimeout          time.Duration
-	I2CRetries          int
-	CheckInterval       time.Duration
-	HistoryInterval     time.Duration
-	DetectInterval      time.Duration
-	ReapplyInterval     time.Duration
-	ListenAddress       string
-	AdminUser           string
-	AdminPassword       string
-	VarINI              string
-	DisksINI            string
+	I2CBus          int
+	I2CAddress      string
+	I2CTimeout      time.Duration
+	I2CRetries      int
+	CheckInterval   time.Duration
+	HistoryInterval time.Duration
+	DetectInterval  time.Duration
+	ReapplyInterval time.Duration
+	ListenAddress   string
+	AdminUser       string
+	AdminPassword   string
+	VarINI          string
+	DisksINI        string
+	// DataDir holds config.json, override.json, history.jsonl and
+	// events.jsonl. History/event writes happen every few minutes (see
+	// HistoryInterval) even when nothing changes, which would periodically
+	// wake a spun-down Unraid array disk; keep this on non-array storage
+	// (the Docker data-root/cache, not a /mnt/user bind mount).
 	DataDir             string
 	MaxLogLines         int
 	SafeShutdownPercent int
@@ -154,10 +159,14 @@ type App struct {
 	testMu            sync.Mutex
 	testCooldownUntil time.Time
 
-	// storageMu/storageOK track whether the most recent persistence attempt
-	// (config, override, history, events) succeeded, surfaced via /api/health.
+	// storageMu/storageOK track the most recent persistence result per
+	// category (config, override, history, events) separately, surfaced via
+	// /api/health. Tracking one combined flag let a successful, unrelated
+	// write (e.g. a history tick) mask an earlier, still-unresolved failure
+	// (e.g. config.json); storageHealthy() is only true when every category
+	// last succeeded.
 	storageMu sync.RWMutex
-	storageOK bool
+	storageOK map[string]bool
 
 	// auth guards the whole dashboard (session cookies), see auth.go.
 	auth *auth
@@ -189,7 +198,12 @@ func New(cfg Config) (*App, error) {
 		commandCh: make(chan struct{}, 1),
 		runtime:   defaultRuntimeConfig(),
 		state:     loopState{online: true, tempOK: true},
-		storageOK: true,
+		storageOK: map[string]bool{
+			storageConfig:   true,
+			storageOverride: true,
+			storageHistory:  true,
+			storageEvents:   true,
+		},
 		writeLimiters: map[string]*rateGate{
 			"override": {},
 			"profile":  {},
@@ -197,7 +211,14 @@ func New(cfg Config) (*App, error) {
 			"test":     {},
 		},
 	}
-	app.auth = newAuth(cfg.AdminUser, cfg.AdminPassword)
+	auth, err := newAuth(cfg.AdminUser, cfg.AdminPassword)
+	if err != nil {
+		// A password that cannot be hashed must never fall back to "auth
+		// disabled" (that would mean the dashboard is open); refuse to start
+		// instead, exactly like the invalid-I2C-address check above.
+		return nil, fmt.Errorf("Login-Konfiguration ungültig: %w", err)
+	}
+	app.auth = auth
 
 	loaded, err := loadRuntimeConfig(st)
 	switch {
@@ -299,6 +320,12 @@ func normalizeRuntimeConfig(in RuntimeConfig) (RuntimeConfig, error) {
 	for name, profile := range in.Profiles {
 		if strings.TrimSpace(name) == "" {
 			return RuntimeConfig{}, errors.New("Profilname darf nicht leer sein")
+		}
+		if len(name) > maxProfileNameLength {
+			return RuntimeConfig{}, fmt.Errorf("Profilname %q ist länger als %d Zeichen", name, maxProfileNameLength)
+		}
+		if len(profile.Name) > maxProfileNameLength {
+			return RuntimeConfig{}, fmt.Errorf("Anzeigename %q von Profil %q ist länger als %d Zeichen", profile.Name, name, maxProfileNameLength)
 		}
 		curve, err := profile.Curve.Normalized()
 		if err != nil {
@@ -412,19 +439,36 @@ func (a *App) ApplySafeState(percent int) {
 	})
 }
 
-// setStorageOK records whether the most recent persistence attempt (config,
-// override, history or events) succeeded. Surfaced via /api/health so
-// monitoring can distinguish "controller unreachable" from "disk full".
-func (a *App) setStorageOK(ok bool) {
+// Storage categories tracked independently by setStorageOK/storageHealthy.
+const (
+	storageConfig   = "config"
+	storageOverride = "override"
+	storageHistory  = "history"
+	storageEvents   = "events"
+)
+
+// setStorageOK records whether the most recent persistence attempt for one
+// category (config, override, history or events) succeeded. Categories are
+// independent on purpose: a successful history tick a minute after a failed
+// config save must not erase the fact that config.json is still broken.
+func (a *App) setStorageOK(category string, ok bool) {
 	a.storageMu.Lock()
-	a.storageOK = ok
+	a.storageOK[category] = ok
 	a.storageMu.Unlock()
 }
 
+// storageHealthy reports whether every category's most recent attempt
+// succeeded. Surfaced via /api/health so monitoring can distinguish
+// "controller unreachable" from "disk full".
 func (a *App) storageHealthy() bool {
 	a.storageMu.RLock()
 	defer a.storageMu.RUnlock()
-	return a.storageOK
+	for _, ok := range a.storageOK {
+		if !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // appendEvent and appendHistory wrap the store's persistence calls so a
@@ -432,7 +476,7 @@ func (a *App) storageHealthy() bool {
 // discarded. The control loop must keep running either way.
 func (a *App) appendEvent(event store.Event) {
 	err := a.store.AppendEvent(event)
-	a.setStorageOK(err == nil)
+	a.setStorageOK(storageEvents, err == nil)
 	if err != nil {
 		log.Printf("[WARN] Ereignis konnte nicht gespeichert werden: %v", err)
 	}
@@ -440,7 +484,7 @@ func (a *App) appendEvent(event store.Event) {
 
 func (a *App) appendHistory(point store.HistoryPoint) {
 	err := a.store.AppendHistory(point)
-	a.setStorageOK(err == nil)
+	a.setStorageOK(storageHistory, err == nil)
 	if err != nil {
 		log.Printf("[WARN] Verlaufspunkt konnte nicht gespeichert werden: %v", err)
 	}
@@ -599,6 +643,7 @@ func (a *App) evaluate(ctx context.Context) {
 	previousTempOK := a.state.tempOK
 	previousOnline := a.state.online
 	previousWriteOK := a.state.writeOK
+	previousReapplyAt := a.state.reapplyAt
 	a.mu.RUnlock()
 
 	if tempErr != nil && previousTempOK {
@@ -648,7 +693,7 @@ func (a *App) evaluate(ctx context.Context) {
 	// mode/hysteresis decisions, only the wire write itself.
 	valueChanged := result.Percent != lastFan
 	rediscovered := online && !previousOnline
-	attemptWrite := shouldWriteFan(valueChanged, now.Sub(a.state.reapplyAt), a.cfg.ReapplyInterval, previousWriteOK, rediscovered)
+	attemptWrite := shouldWriteFan(valueChanged, now.Sub(previousReapplyAt), a.cfg.ReapplyInterval, previousWriteOK, rediscovered)
 
 	writeOK := online
 	var writeErr error

@@ -1,5 +1,70 @@
 # Changelog
 
+## 4.3.0
+
+### Kritisch behoben
+
+- Ein `ADMIN_PASSWORD` über 72 Byte ließ bcrypt fehlschlagen; der Code
+  behauptete "fail closed", setzte `enabled` aber faktisch nie und ließ das
+  Dashboard damit ohne jeden Login offen. `newAuth` gibt jetzt einen Fehler
+  zurück, `New()`/der Dienst starten in diesem Fall gar nicht erst
+
+### Behoben
+
+- `a.state.reapplyAt` wurde in `evaluate()` außerhalb des Locks gelesen;
+  jetzt Teil desselben unter `RLock()` erstellten Snapshots wie die übrigen
+  Loop-Statusfelder
+- `storageOK` war ein einzelnes globales Flag: ein erfolgreicher
+  History-Schreibvorgang konnte einen weiterhin ungelösten Config-Fehler
+  verdecken. Jetzt pro Kategorie (config/override/history/events) getrennt
+  verfolgt, `storage` in `/api/health` ist nur `true`, wenn alle vier zuletzt
+  erfolgreich waren
+- `Store.Remove()` synct jetzt das Verzeichnis nach dem Löschen (dieselbe
+  Garantie, die `SaveJSON` beim Schreiben schon hatte)
+- Fehler bei der Logrotation (Zeilenzählung, Prune) werden jetzt geloggt
+  statt still verschluckt
+- Sessions und Login-Rate-Limits pro IP wurden bisher nur beim erneuten
+  Zugriff auf denselben (dann abgelaufenen) Eintrag entfernt; ein
+  stündlicher Sweep räumt jetzt abgelaufene Sessions und veraltete
+  Rate-Limits aktiv auf
+- Das Session-Cookie bekommt `Secure`, sobald die Anfrage über TLS ankam
+  (direkt oder `X-Forwarded-Proto: https`); bei reinem HTTP unverändert
+- Der Login-Rate-Limiter war global (ein Client konnte damit jeden anderen,
+  inklusive des echten Admins, aussperren); jetzt pro Client-IP
+- Profilnamen und Anzeigenamen haben jetzt eine Längenbegrenzung (64 Zeichen)
+
+## 4.2.1
+
+### Geprüft
+
+- Audit: der Dienst greift nie direkt auf die Festplatten zu. `disks.ini`/
+  `var.ini` werden nur von Unraids eigener RAM-Datei gelesen (unabhängig vom
+  Poll-Intervall kein Plattenzugriff), I²C spricht ausschließlich den
+  Fan-Controller-Chip an, nirgends wird `smartctl`/`hdparm` aufgerufen.
+  Einzige Voraussetzung: `/data` muss auf nicht-Array-Speicher bleiben (wie
+  im mitgelieferten `fan-data`-Docker-Volume), da die Verlaufs-/Event-Datei
+  alle paar Minuten geschrieben wird. Das ist jetzt in
+  [docker-compose.yml](docker-compose.yml), [README.md](README.md) und einem
+  Code-Kommentar an `Config.DataDir` dokumentiert, um versehentliches
+  Umbiegen auf eine Array-Platte zu verhindern.
+
+## 4.2.0
+
+### Neu und verbessert
+
+- Browser drosseln `setInterval` in Hintergrund-Tabs stark (teils auf einmal
+  pro Minute oder seltener), wodurch das Dashboard in einem inaktiven Tab
+  lange auf veralteten Daten stehen blieb und erst beim Zurückwechseln
+  "aufwachte". Ein `visibilitychange`/`focus`-Listener löst jetzt sofort
+  einen vollständigen Refresh aus, sobald der Tab wieder sichtbar/aktiv wird
+- `fetch`-Aufrufe haben jetzt ein 10-Sekunden-Timeout (`AbortController`);
+  eine nach Standby oder Netzwerkwechsel hängende Anfrage blockiert die
+  Oberfläche nicht mehr unbegrenzt
+- Der Verlauf-Chart wird beim Wechsel auf die Verlauf-Seite immer neu
+  gezeichnet: `canvas.clientWidth` ist 0, solange die Seite nicht sichtbar
+  ist, wodurch ein Redraw, der zufällig im Hintergrund lief, das Diagramm in
+  falscher Breite gezeichnet haben konnte
+
 ## 4.1.2
 
 ### Behoben

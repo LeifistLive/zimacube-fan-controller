@@ -497,12 +497,33 @@ func TestHealthReportsIndividualChecks(t *testing.T) {
 	}
 
 	// Storage-Fehler simulieren.
-	service.setStorageOK(false)
+	service.setStorageOK(storageConfig, false)
 	recorder = do(t, handler, http.MethodGet, "/api/health", nil)
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatalf("Health-Antwort ist kein JSON: %v", err)
 	}
 	if storage, _ := body["storage"].(bool); storage {
 		t.Fatalf("storage sollte false sein: %+v", body)
+	}
+}
+
+// Regression: a single combined storageOK flag let an unrelated successful
+// write mask an earlier, still-unresolved failure in a different category.
+func TestStorageHealthDoesNotMaskUnrelatedCategoryFailure(t *testing.T) {
+	service := newTestApp(t, "")
+
+	service.setStorageOK(storageConfig, false)
+	if service.storageHealthy() {
+		t.Fatal("storageHealthy sollte nach fehlgeschlagenem Config-Write false sein")
+	}
+
+	service.setStorageOK(storageHistory, true)
+	if service.storageHealthy() {
+		t.Fatal("ein erfolgreicher History-Write darf einen offenen Config-Fehler nicht verdecken")
+	}
+
+	service.setStorageOK(storageConfig, true)
+	if !service.storageHealthy() {
+		t.Fatal("storageHealthy sollte true sein, sobald auch Config wieder erfolgreich ist")
 	}
 }

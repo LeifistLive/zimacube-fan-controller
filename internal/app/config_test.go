@@ -1,6 +1,7 @@
 package app
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/LeifistLive/zimacube-fan-controller/internal/controller"
@@ -84,6 +85,11 @@ func TestNormalizeRejectsBrokenProfiles(t *testing.T) {
 		"Notfallprozent ungültig":   withProfile(func(p *Profile) { p.EmergencyPercent = 120 }),
 		"Notfalltemperatur zu tief": withProfile(func(p *Profile) { p.EmergencyTemperature = 5 }),
 		"Hysterese negativ":         withProfile(func(p *Profile) { p.HysteresisC = -1 }),
+		"Anzeigename zu lang":       withProfile(func(p *Profile) { p.Name = strings.Repeat("x", maxProfileNameLength+1) }),
+		"Profilname (Key) zu lang": {
+			ActiveProfile: strings.Repeat("k", maxProfileNameLength+1),
+			Profiles:      map[string]Profile{strings.Repeat("k", maxProfileNameLength+1): base},
+		},
 	}
 
 	for name, config := range cases {

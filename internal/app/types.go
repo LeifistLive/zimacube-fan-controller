@@ -27,6 +27,12 @@ const (
 // place that translates an older (or missing) version into the current one.
 const currentConfigVersion = 1
 
+// maxProfileNameLength bounds both a profile's map key and its display name.
+// Neither had a limit before, so an API caller could otherwise bloat
+// config.json (and the dashboard's profile table) with an arbitrarily long
+// string.
+const maxProfileNameLength = 64
+
 type Profile struct {
 	Name                 string           `json:"name"`
 	Curve                controller.Curve `json:"curve"`

@@ -660,8 +660,19 @@ function say(text) {
   }
 }
 
+// fetchWithTimeout aborts a request that is still pending after timeoutMs.
+// Without this, a connection stalled by e.g. the machine sleeping or a
+// network change never resolves nor rejects, and the tab looks permanently
+// stuck loading until it is refreshed by hand.
+function fetchWithTimeout(url, options, timeoutMs) {
+  var controller = new AbortController();
+  var timer = setTimeout(function () { controller.abort(); }, timeoutMs || 10000);
+  var merged = Object.assign({}, options, { signal: controller.signal });
+  return fetch(url, merged).finally(function () { clearTimeout(timer); });
+}
+
 async function getJSON(url) {
-  var response = await fetch(url, { cache: "no-store" });
+  var response = await fetchWithTimeout(url, { cache: "no-store" });
   if (response.status === 401) { window.location.href = "/login"; throw new Error("nicht angemeldet"); }
   var text = await response.text();
   if (!response.ok) { throw new Error(response.status + ": " + text); }
@@ -681,7 +692,7 @@ async function describeResponse(response) {
 
 async function post(path, body) {
   try {
-    var response = await fetch(path, {
+    var response = await fetchWithTimeout(path, {
       method: "POST",
       headers: body ? { "Content-Type": "application/json" } : {},
       body: body ? JSON.stringify(body) : undefined
@@ -1140,6 +1151,12 @@ function showSection(id) {
   document.querySelectorAll(".side-link").forEach(function (link) {
     link.classList.toggle("active", link.dataset.section === id);
   });
+  // canvas.clientWidth is always 0 while its section is display:none, so a
+  // redraw that happened to run in the background (the 30s interval keeps
+  // ticking regardless of which page is showing) can leave the chart sized
+  // for a hidden 0-width element. Redraw once the History page is actually
+  // visible again, so it always reflects the real container width.
+  if (id === "history") { refreshHistory(); }
 }
 
 function setupNavigation() {
@@ -1213,6 +1230,16 @@ function wire() {
 
   window.addEventListener("resize", function () { refreshHistory(); });
   setupNavigation();
+
+  // Browsers heavily throttle setInterval in a background tab (sometimes to
+  // once a minute or less), so a dashboard left in a background tab can sit
+  // on stale data for a long time. Force an immediate refresh the moment the
+  // tab/window is actually looked at again instead of waiting for the next
+  // (possibly long-delayed) tick.
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") { refreshAll(); }
+  });
+  window.addEventListener("focus", function () { refreshAll(); });
 
   refreshAll();
   setInterval(refreshStatus, 3000);

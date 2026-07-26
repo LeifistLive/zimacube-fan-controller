@@ -16,6 +16,13 @@ leer, ist der Login deaktiviert und alles offen erreichbar.
 `ADMIN_USER`/`ADMIN_PASSWORD` aus der Container-Umgebung ein und cached die
 Session in `/tmp/fanctl-session`.
 
+`POST /login` ist pro Client-IP auf einen Versuch alle 2 Sekunden begrenzt
+(nicht global), damit ein einzelner Client niemals den Login für alle
+anderen blockieren kann. Das Session-Cookie bekommt automatisch `Secure`,
+sobald die Anfrage über TLS ankommt (direkt oder über
+`X-Forwarded-Proto: https` hinter einem Reverse-Proxy) – bei reinem HTTP im
+LAN bleibt es unverändert nutzbar.
+
 ## Lesend
 
 - `GET /api/status`

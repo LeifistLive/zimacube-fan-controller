@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -123,6 +124,9 @@ func (s *Store) LoadJSON(name string, value any) error {
 	return nil
 }
 
+// Remove deletes name and fsyncs the directory, so a power loss right after
+// clearing e.g. override.json cannot leave the old file back on disk (the
+// same durability guarantee SaveJSON already gives the write path).
 func (s *Store) Remove(name string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -131,7 +135,10 @@ func (s *Store) Remove(name string) error {
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	return syncDir(s.dir)
 }
 
 func (s *Store) AppendHistory(point HistoryPoint) error {
@@ -210,6 +217,9 @@ func (s *Store) appendJSONLine(name string, value any) error {
 		count, err = countLines(path)
 		if err != nil {
 			// Rotation is best effort; the line itself is already written.
+			// Logged rather than silently dropped so a permissions/IO problem
+			// that will keep the file growing unbounded is visible.
+			log.Printf("[WARN] %s: Zeilen konnten nicht gezählt werden, Rotation pausiert: %v", name, err)
 			return nil
 		}
 	}
@@ -217,7 +227,9 @@ func (s *Store) appendJSONLine(name string, value any) error {
 
 	if count > s.maxLines+s.maxLines/10 {
 		kept, err := prune(path, s.maxLines)
-		if err == nil {
+		if err != nil {
+			log.Printf("[WARN] %s: Rotation fehlgeschlagen, Datei wächst vorerst weiter: %v", name, err)
+		} else {
 			s.counts[name] = kept
 		}
 	}

@@ -72,6 +72,15 @@ it, login is disabled and the whole dashboard is open; with it, every route
 except `GET /login`, `POST /login` and `GET /api/health` requires a session.
 Cross-site requests are rejected regardless of login state.
 
+The service only ever reads Unraid's own `disks.ini`/`var.ini` (RAM-backed
+status files emhttp maintains itself) and talks I²C to the backplane's fan
+controller chip — never to the drives — so polling never wakes a spun-down
+disk. The one thing to keep an eye on is `/data` (config, override, history,
+events): keep it on the `fan-data` Docker volume as shipped (Docker's
+data-root, normally cache/boot on Unraid). History/event writes happen every
+few minutes even when nothing changes; re-mounting `/data` onto an array
+disk would wake it up on that same schedule.
+
 ## Portainer
 
 Deploy as a Git repository stack. Since the image is built locally, disable

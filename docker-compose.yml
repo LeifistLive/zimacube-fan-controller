@@ -24,6 +24,13 @@ services:
       # schreibt var.ini und disks.ini neu, ein Single-File-Mount zeigt danach
       # dauerhaft auf den alten Inode und die Temperaturen frieren ein.
       - /var/local/emhttp:/var/local/emhttp:ro
+      # Absichtlich ein benanntes Docker-Volume (liegt bei Unraid auf dem
+      # Docker-Datenspeicher, i.d.R. Cache/Boot) statt eines Bind-Mounts nach
+      # /mnt/user/... : config.json/override.json/history.jsonl/events.jsonl
+      # werden regelmaessig geschrieben (Verlauf alle HISTORY_INTERVAL_SECONDS,
+      # Standard 5 Min.). Auf einer Array-Platte wuerde das eine im Standby
+      # befindliche Platte periodisch aufwecken. Nicht auf eine Array-Platte
+      # umbiegen.
       - fan-data:/data
 
     environment:

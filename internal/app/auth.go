@@ -4,8 +4,11 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
+	"fmt"
 	"log"
+	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -19,6 +22,12 @@ const (
 	sessionTTL        = 24 * time.Hour
 	loginRateInterval = 2 * time.Second
 	bcryptCost        = 12
+	// sweepInterval controls how often expired sessions and stale per-IP
+	// login rate gates are dropped from memory, see sweepExpiredPeriodically.
+	sweepInterval = time.Hour
+	// staleLoginLimiter: a per-IP gate that has not been used in this long is
+	// safe to forget; it will simply be recreated on the next attempt.
+	staleLoginLimiter = 24 * time.Hour
 )
 
 // auth holds the admin credential (hashed) and the in-memory session store
@@ -35,25 +44,39 @@ type auth struct {
 	mu       sync.Mutex
 	sessions map[string]time.Time
 
-	loginLimiter rateGate
+	// loginLimiters rate-limits login attempts per client IP (never per
+	// forwarded/spoofable header) so one abusive or mistaken client cannot
+	// lock the real admin out of their own login by exhausting a single
+	// shared gate.
+	loginLimitersMu sync.Mutex
+	loginLimiters   map[string]*rateGate
 }
 
-func newAuth(user, password string) *auth {
-	a := &auth{user: user, sessions: map[string]time.Time{}}
+// newAuth returns an error when ADMIN_PASSWORD is set but unusable (bcrypt
+// rejects anything over 72 bytes). That must never be treated as "leave
+// auth disabled": disabled means the whole dashboard is open, which is the
+// opposite of what a configuration error should do. The caller (New) turns
+// this into a startup failure instead, so a broken password blocks the
+// service from ever serving a request rather than silently exposing it.
+func newAuth(user, password string) (*auth, error) {
+	a := &auth{
+		user:          user,
+		sessions:      map[string]time.Time{},
+		loginLimiters: map[string]*rateGate{},
+	}
+	go a.sweepExpiredPeriodically()
+
 	if password == "" {
 		log.Printf("[WARN] ADMIN_PASSWORD ist leer, das Dashboard ist ohne Login erreichbar")
-		return a
+		return a, nil
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
 	if err != nil {
-		// GenerateFromPassword only fails for a password over 72 bytes; fail
-		// closed (auth stays disabled, loudly) rather than half-configured.
-		log.Printf("[ERROR] ADMIN_PASSWORD konnte nicht gehasht werden (%v), Login bleibt deaktiviert", err)
-		return a
+		return nil, fmt.Errorf("ADMIN_PASSWORD konnte nicht gehasht werden: %w", err)
 	}
 	a.passwordHash = hash
 	a.enabled = true
-	return a
+	return a, nil
 }
 
 // verify always runs bcrypt, even for a wrong username, so a mismatched
@@ -106,6 +129,58 @@ func (a *auth) destroySession(id string) {
 	a.mu.Unlock()
 }
 
+// loginLimiterFor returns the rate gate for a client IP, creating one on
+// first use.
+func (a *auth) loginLimiterFor(ip string) *rateGate {
+	a.loginLimitersMu.Lock()
+	defer a.loginLimitersMu.Unlock()
+	gate, ok := a.loginLimiters[ip]
+	if !ok {
+		gate = &rateGate{}
+		a.loginLimiters[ip] = gate
+	}
+	return gate
+}
+
+// sweepExpiredPeriodically runs for the lifetime of the process: sessions
+// are otherwise only ever removed lazily when someone tries to use that
+// exact (by then expired) cookie again, so an abandoned session (browser
+// closed, cookie cleared) would sit in memory until the process restarts.
+// The same applies to per-IP login rate gates for clients that stop trying.
+func (a *auth) sweepExpiredPeriodically() {
+	ticker := time.NewTicker(sweepInterval)
+	defer ticker.Stop()
+	for range ticker.C {
+		a.sweepExpired()
+	}
+}
+
+func (a *auth) sweepExpired() {
+	now := time.Now()
+
+	a.mu.Lock()
+	for id, expiry := range a.sessions {
+		if now.After(expiry) {
+			delete(a.sessions, id)
+		}
+	}
+	a.mu.Unlock()
+
+	a.loginLimitersMu.Lock()
+	for ip, gate := range a.loginLimiters {
+		gate.mu.Lock()
+		// A zero next means Allow was never called on this gate yet (it was
+		// just created); that is not the same as stale and must not be swept
+		// on the very next tick.
+		stale := !gate.next.IsZero() && now.Sub(gate.next) > staleLoginLimiter
+		gate.mu.Unlock()
+		if stale {
+			delete(a.loginLimiters, ip)
+		}
+	}
+	a.loginLimitersMu.Unlock()
+}
+
 func (a *App) authenticated(r *http.Request) bool {
 	if !a.auth.enabled {
 		return true
@@ -117,15 +192,43 @@ func (a *App) authenticated(r *http.Request) bool {
 	return a.auth.validSession(cookie.Value)
 }
 
-func sessionCookie(value string, maxAge int) *http.Cookie {
+// requestIsSecure reports whether r arrived over TLS, either terminated by
+// this process directly or by a reverse proxy in front of it. Only the
+// standard X-Forwarded-Proto header is trusted; there is no configuration
+// for "trusted proxy" here, but this header is only ever consulted to
+// decide the cookie's Secure flag, never for anything access-control
+// relevant, so a client forging it can at most make its own cookie
+// non-Secure (or Secure when plain HTTP still works fine on localhost).
+func requestIsSecure(r *http.Request) bool {
+	if r.TLS != nil {
+		return true
+	}
+	return strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+}
+
+func sessionCookie(r *http.Request, value string, maxAge int) *http.Cookie {
 	return &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    value,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   requestIsSecure(r),
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   maxAge,
 	}
+}
+
+// clientIP extracts the TCP peer address, deliberately ignoring
+// X-Forwarded-For: unlike the Secure-cookie heuristic above, this value
+// gates the login rate limiter, and trusting a client-supplied header there
+// would let an attacker either evade the limit (a different value per
+// request) or lock out the real admin (submit the admin's own address).
+func clientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }
 
 // requireAuth protects every route except GET/POST /login and GET
@@ -164,7 +267,7 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
 		return
 	}
-	if !a.auth.loginLimiter.Allow(time.Now(), loginRateInterval) {
+	if !a.auth.loginLimiterFor(clientIP(r)).Allow(time.Now(), loginRateInterval) {
 		writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "zu viele Loginversuche, bitte kurz warten"})
 		return
 	}
@@ -184,7 +287,7 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Session konnte nicht erstellt werden"})
 		return
 	}
-	http.SetCookie(w, sessionCookie(session, int(sessionTTL.Seconds())))
+	http.SetCookie(w, sessionCookie(r, session, int(sessionTTL.Seconds())))
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -192,6 +295,6 @@ func (a *App) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if cookie, err := r.Cookie(sessionCookieName); err == nil {
 		a.auth.destroySession(cookie.Value)
 	}
-	http.SetCookie(w, sessionCookie("", -1))
+	http.SetCookie(w, sessionCookie(r, "", -1))
 	writeJSON(w, http.StatusOK, map[string]string{"status": "logged out"})
 }
