@@ -1,5 +1,28 @@
 # Changelog
 
+## 4.0.2
+
+### Behoben
+
+- Der Chart-Tooltip erschien im gesamten Diagramm, auch tief im
+  Verlaufs-Füllbereich unterhalb der Linie; er zeigt sich jetzt nur noch,
+  wenn der Mauszeiger nah an der Linie selbst ist
+- "Modus & Test" zeigte Prozent-Eingabe und Testknöpfe immer an; sie
+  erscheinen jetzt nur noch, wenn "Manuell" ausgewählt ist (bei Automatik
+  und Notfall bleiben sie ausgeblendet)
+
+## 4.0.1
+
+### Behoben
+
+- Der Flash-Boot-Stick wurde auf einem realen System trotz `IsHDD()`-Filter
+  weiter als HDD gezählt, weil seine `disks.ini`-Sektion kein `type="FLASH"`
+  hatte. Der Ausschluss prüft jetzt zusätzlich den Sektionsnamen (`flash`,
+  `cache*`), unabhängig vom `type=`-Feld
+- Die Festplatten-Kachel zeigte die Laufwerke in `disks.ini`-Schreibreihen-
+  folge statt sortiert; `disk1..diskN` und `parity`/`parity2` erscheinen jetzt
+  in natürlicher Reihenfolge
+
 ## 4.0.0
 
 ### Breaking

@@ -174,7 +174,7 @@ Aktualisieren
 <input id="percent" class="input num-input" type="number" min="1" max="100" value="75">
 <button id="setManual" class="pill-btn pill-primary" type="button">Setzen</button>
 </div>
-<div class="controls-row">
+<div class="controls-row" id="testRow" hidden>
 <span class="muted small">Test</span>
 <button type="button" class="pill-btn pill-ghost" data-test="25">25 %</button>
 <button type="button" class="pill-btn pill-ghost" data-test="50">50 %</button>
@@ -820,9 +820,10 @@ function renderDiskGrid(disks) {
 // The segmented mode control reflects the requested override (empty/"" means
 // automatic), not the resulting live status.mode, which can show
 // "array-boost"/"failsafe" from safety logic while the operator's own choice
-// is still "automatic". The manual row, once opened, stays open until the
-// operator picks a different mode, so mid-typing it does not vanish on the
-// next 3s status poll.
+// is still "automatic". The manual/test rows belong only to "Manuell": they
+// stay hidden for Automatik and Notfall, and once opened for Manuell they
+// stay open until the operator picks a different mode, so mid-typing they do
+// not vanish on the next 3s status poll.
 function applyModeState(overrideMode) {
   var mode = overrideMode || "automatic";
   if (mode === "manual") { manualRowOpen = true; }
@@ -830,6 +831,7 @@ function applyModeState(overrideMode) {
     btn.classList.toggle("active", btn.dataset.setMode === mode);
   });
   byId("manualRow").hidden = !manualRowOpen;
+  byId("testRow").hidden = !manualRowOpen;
 }
 
 function renderProfileTable() {
@@ -998,9 +1000,20 @@ function drawArea(canvas, points, valueKey, color, minFloor, maxFloor, suffix) {
   ctx.fillText(last, Math.max(padLeft, width - padRight - ctx.measureText(last).width), height - 4);
 
   // Remembered so a mousemove handler (see wire()) can find the nearest
-  // point by x position and show its exact value, without redrawing.
-  canvas._tooltip = { points: points, valueKey: valueKey, suffix: suffix, px: points.map(function (_, index) { return px(index); }) };
+  // point by x position and show its exact value, without redrawing. py is
+  // kept alongside px so the tooltip can require the cursor to actually be
+  // near the line, not just anywhere in the gradient-filled area below it.
+  canvas._tooltip = {
+    points: points, valueKey: valueKey, suffix: suffix,
+    px: points.map(function (_, index) { return px(index); }),
+    py: points.map(function (point) { return py(point[valueKey]); })
+  };
 }
+
+// hoverTolerancePx bounds how far (in CSS pixels) the cursor may be from the
+// line itself, vertically, before the tooltip hides. Without it the tooltip
+// showed anywhere under the line, including deep in the gradient fill.
+var hoverTolerancePx = 14;
 
 function showChartTooltip(canvas, tooltip, clientX, clientY) {
   var data = canvas._tooltip;
@@ -1008,6 +1021,7 @@ function showChartTooltip(canvas, tooltip, clientX, clientY) {
 
   var rect = canvas.getBoundingClientRect();
   var x = clientX - rect.left;
+  var y = clientY - rect.top;
   var nearest = 0;
   var nearestDist = Infinity;
   data.px.forEach(function (px, index) {
@@ -1015,11 +1029,16 @@ function showChartTooltip(canvas, tooltip, clientX, clientY) {
     if (dist < nearestDist) { nearestDist = dist; nearest = index; }
   });
 
+  if (Math.abs(y - data.py[nearest]) > hoverTolerancePx) {
+    tooltip.hidden = true;
+    return;
+  }
+
   var point = data.points[nearest];
   var value = point[data.valueKey];
   tooltip.textContent = new Date(point.time).toLocaleString() + " – " + value + data.suffix;
-  tooltip.style.left = (clientX - rect.left) + "px";
-  tooltip.style.top = (clientY - rect.top) + "px";
+  tooltip.style.left = x + "px";
+  tooltip.style.top = y + "px";
   tooltip.hidden = false;
 }
 
@@ -1085,12 +1104,14 @@ function wire() {
       if (mode === "manual") {
         manualRowOpen = true;
         byId("manualRow").hidden = false;
+        byId("testRow").hidden = false;
         document.querySelectorAll(".mode-btn").forEach(function (b) { b.classList.toggle("active", b === btn); });
         byId("percent").focus();
         return;
       }
       manualRowOpen = false;
       byId("manualRow").hidden = true;
+      byId("testRow").hidden = true;
       post(mode === "emergency" ? "/api/mode/emergency" : "/api/mode/auto");
     });
   });

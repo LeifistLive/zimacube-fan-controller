@@ -93,6 +93,76 @@ temp="30"
 	}
 }
 
+// Regression: Auf einem echten System hatte der Flash-Boot-Stick kein
+// type="FLASH"-Feld, wurde also trotz des Typ-Filters noch als HDD gezaehlt.
+// Der Sektionsname "flash" (Unraids eigene Konvention) muss allein reichen.
+func TestReadDiskTemperaturesExcludesFlashByNameWithoutTypeField(t *testing.T) {
+	path := write(t, "disks.ini", `["disk1"]
+name="disk1"
+type="DATA"
+temp="35"
+["flash"]
+name="flash"
+temp="42"
+`)
+
+	result, err := ReadDiskTemperatures(path)
+	if err != nil {
+		t.Fatalf("unerwarteter Fehler: %v", err)
+	}
+	if result.Maximum != 35 {
+		t.Fatalf("Maximum = %d, erwartet 35 (Flash-Stick ohne type= muss trotzdem ausgeschlossen sein)", result.Maximum)
+	}
+	if len(result.Disks) != 1 || result.Disks[0].Name != "disk1" {
+		t.Fatalf("Disks sollte nur disk1 enthalten: %+v", result.Disks)
+	}
+}
+
+// Regression: disks.ini listet Sektionen in Schreibreihenfolge von emhttp,
+// nicht in einer fuer den Nutzer sinnvollen Reihenfolge.
+func TestReadDiskTemperaturesSortsNaturally(t *testing.T) {
+	path := write(t, "disks.ini", `["parity2"]
+name="parity2"
+type="PARITY"
+temp="33"
+["disk10"]
+name="disk10"
+type="DATA"
+temp="30"
+["disk2"]
+name="disk2"
+type="DATA"
+temp="31"
+["parity"]
+name="parity"
+type="PARITY"
+temp="32"
+["disk1"]
+name="disk1"
+type="DATA"
+temp="34"
+`)
+
+	result, err := ReadDiskTemperatures(path)
+	if err != nil {
+		t.Fatalf("unerwarteter Fehler: %v", err)
+	}
+
+	var names []string
+	for _, disk := range result.Disks {
+		names = append(names, disk.Name)
+	}
+	expected := []string{"disk1", "disk2", "disk10", "parity", "parity2"}
+	if len(names) != len(expected) {
+		t.Fatalf("Namen = %v, erwartet %v", names, expected)
+	}
+	for i := range expected {
+		if names[i] != expected[i] {
+			t.Fatalf("Namen = %v, erwartet %v", names, expected)
+		}
+	}
+}
+
 // Fehlt das type=-Feld ganz (aeltere Unraid-Versionen), muss das Laufwerk wie
 // bisher mitgezaehlt werden, statt durch den neuen Filter zu verschwinden.
 func TestReadDiskTemperaturesCountsDisksWithoutTypeField(t *testing.T) {

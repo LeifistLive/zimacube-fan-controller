@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -33,7 +34,16 @@ type Disk struct {
 // drive are typically SSD/NVMe and are excluded; everything else (DATA,
 // PARITY, and sections with no type= field at all, e.g. older Unraid
 // versions) counts, which is the safe default when the field is missing.
+//
+// The type= field alone turned out not to be reliable for the flash boot
+// device (some Unraid versions leave it unset for that section), so the
+// section name is also checked: Unraid's own naming convention always calls
+// the boot drive "flash" and cache pool members "cache"/"cache2"/... .
 func (d Disk) IsHDD() bool {
+	name := strings.ToLower(strings.TrimSpace(d.Name))
+	if name == "flash" || strings.HasPrefix(name, "cache") {
+		return false
+	}
 	switch strings.ToUpper(strings.TrimSpace(d.Type)) {
 	case "CACHE", "FLASH":
 		return false
@@ -147,7 +157,43 @@ func ReadDiskTemperatures(path string) (DiskTemperatures, error) {
 	if result.Reporting == 0 {
 		return result, fmt.Errorf("keine temp=-Einträge in %s gefunden", path)
 	}
+
+	// disks.ini lists sections in whatever order emhttp last wrote them,
+	// which is not necessarily a sensible display order. A natural sort
+	// (name prefix, then trailing number) puts disk1..disk10 and
+	// parity/parity2 in the order an operator expects instead of file order.
+	sort.SliceStable(result.Disks, func(i, j int) bool {
+		return diskNameLess(result.Disks[i].Name, result.Disks[j].Name)
+	})
 	return result, nil
+}
+
+func diskNameLess(a, b string) bool {
+	aPrefix, aNum, aHasNum := splitTrailingNumber(a)
+	bPrefix, bNum, bHasNum := splitTrailingNumber(b)
+	if aPrefix != bPrefix {
+		return aPrefix < bPrefix
+	}
+	if aHasNum != bHasNum {
+		// "parity" before "parity2": the unnumbered entry is the first one.
+		return bHasNum
+	}
+	return aNum < bNum
+}
+
+func splitTrailingNumber(s string) (prefix string, number int, hasNumber bool) {
+	i := len(s)
+	for i > 0 && s[i-1] >= '0' && s[i-1] <= '9' {
+		i--
+	}
+	if i == len(s) {
+		return s, 0, false
+	}
+	n, err := strconv.Atoi(s[i:])
+	if err != nil {
+		return s, 0, false
+	}
+	return s[:i], n, true
 }
 
 // ArrayOperation reports a running parity check, rebuild, resync or clear.
