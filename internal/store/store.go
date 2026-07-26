@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -99,6 +100,9 @@ func (s *Store) SaveJSON(name string, value any) error {
 	return syncDir(s.dir)
 }
 
+// LoadJSON rejects unknown fields and trailing data after the JSON object, so
+// a corrupted or hand-edited config.json/override.json fails loudly instead
+// of silently dropping fields the caller expected to be set.
 func (s *Store) LoadJSON(name string, value any) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -107,7 +111,16 @@ func (s *Store) LoadJSON(name string, value any) error {
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal(data, value)
+
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(value); err != nil {
+		return err
+	}
+	if err := decoder.Decode(new(json.RawMessage)); !errors.Is(err, io.EOF) {
+		return fmt.Errorf("%s: unerwartete Daten nach dem JSON-Objekt", name)
+	}
+	return nil
 }
 
 func (s *Store) Remove(name string) error {

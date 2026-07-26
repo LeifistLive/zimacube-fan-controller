@@ -3,7 +3,9 @@
 set -eu
 
 BASE_URL="${FANCTL_URL:-http://127.0.0.1:8080}"
-TOKEN="${API_TOKEN:-}"
+ADMIN_USER="${ADMIN_USER:-admin}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
+COOKIE_FILE="${FANCTL_COOKIE_FILE:-/tmp/fanctl-session}"
 COMMAND="${1:-status}"
 
 usage() {
@@ -11,9 +13,22 @@ usage() {
 	exit 2
 }
 
-# Der Header wird als ein einzelnes, gequotetes Argument uebergeben. Frueher
-# wurde die Variable unquotiert expandiert und am Leerzeichen zerlegt, wodurch
-# der Token nie beim Server ankam.
+# Loggt sich per HTTP-Basic-Auth ein (derselbe Mechanismus wie die
+# Login-Seite) und speichert die resultierende Session-Cookie. Ohne
+# ADMIN_PASSWORD ist der Login serverseitig deaktiviert, ein Login-Versuch
+# schadet dann nicht, liefert aber auch keine Cookie.
+login() {
+	wget -qO- --timeout=15 --method=POST --body-data= \
+		--header="Authorization: Basic $(printf '%s:%s' "$ADMIN_USER" "$ADMIN_PASSWORD" | base64)" \
+		--save-cookies="$COOKIE_FILE" --keep-session-cookies \
+		"$BASE_URL/login" >/dev/null 2>&1 || true
+}
+
+# request retries once after a fresh login if the cached session is missing
+# or has expired, so a stale /tmp/fanctl-session from a previous container
+# start does not require the operator to intervene. wget does not write the
+# response body for a non-2xx status by default, so a failed first attempt
+# cannot have already printed anything, and the retry cannot duplicate output.
 request() {
 	method="$1"
 	path="$2"
@@ -22,11 +37,14 @@ request() {
 	if [ "$method" = "POST" ]; then
 		set -- "$@" --method=POST --body-data=
 	fi
-	if [ -n "$TOKEN" ]; then
-		set -- "$@" "--header=X-API-Token: $TOKEN"
-	fi
 
-	exec wget "$@" "$BASE_URL$path"
+	[ -f "$COOKIE_FILE" ] || login
+
+	if wget "$@" --load-cookies="$COOKIE_FILE" "$BASE_URL$path" 2>/dev/null; then
+		return 0
+	fi
+	login
+	exec wget "$@" --load-cookies="$COOKIE_FILE" "$BASE_URL$path"
 }
 
 is_number() {

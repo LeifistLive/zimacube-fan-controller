@@ -55,6 +55,9 @@ Konfiguration
 <div class="sidebar-footer-title">Controller</div>
 <div class="sidebar-footer-sub" id="sidebarStatus">–</div>
 </div>
+<button type="button" id="logout" class="sidebar-logout" title="Abmelden" aria-label="Abmelden">
+<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4H4.8A1.8 1.8 0 0 0 3 5.8v8.4A1.8 1.8 0 0 0 4.8 16H8"/><path d="M13 6.5 17 10l-4 3.5"/><line x1="17" y1="10" x2="7.5" y2="10"/></svg>
+</button>
 </div>
 </aside>
 
@@ -66,14 +69,9 @@ Konfiguration
 <div class="sub">Live-Überwachung deiner HDD-Lüftersteuerung <span id="version" class="version-badge"></span></div>
 </div>
 <div class="head-actions">
-<input id="token" class="input token-input" type="password" placeholder="API-Token" autocomplete="off">
-<button type="button" class="pill-btn" data-post="/api/mode/auto">
-<svg viewBox="0 0 20 20" fill="currentColor" stroke="none"><path d="M6 4.5v11l9-5.5z"/></svg>
-Automatik
-</button>
-<button type="button" class="pill-btn pill-danger" data-post="/api/mode/emergency">
-<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3 18 17H2Z"/><line x1="10" y1="8" x2="10" y2="12"/><circle cx="10" cy="14.3" r="0.9" fill="currentColor" stroke="none"/></svg>
-Notfall
+<button type="button" id="themeToggle" class="theme-toggle" title="Hell/Dunkel umschalten" aria-label="Hell/Dunkel umschalten">
+<svg class="icon-sun" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="3.2"/><path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.9 4.9l1.4 1.4M13.7 13.7l1.4 1.4M4.9 15.1l1.4-1.4M13.7 6.3l1.4-1.4"/></svg>
+<svg class="icon-moon" viewBox="0 0 20 20" fill="currentColor" stroke="none"><path d="M15.8 12.9A6.2 6.2 0 0 1 7.1 4.2a6.7 6.7 0 1 0 8.7 8.7Z"/></svg>
 </button>
 <button id="refresh" type="button" class="pill-btn pill-primary">
 <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.9 10A6.1 6.1 0 0 1 16 6.9"/><path d="M16.1 10A6.1 6.1 0 0 1 4 13.1"/><path d="M16 4v3.3h-3.3"/><path d="M4 16v-3.3h3.3"/></svg>
@@ -91,11 +89,12 @@ Aktualisieren
 <div class="hero-card">
 <div class="hero-head">
 <span class="icon-box"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="6.5"/><path d="M10 10L10 4.2M10 10L14.7 12.8M10 10L5.3 12.8"/><circle cx="10" cy="10" r="1.3" fill="currentColor" stroke="none"/></svg></span>
-<div><div class="hero-title">Lüfter</div><div class="hero-sub">Geschriebener Prozentwert</div></div>
+<div><div class="hero-title">Lüfter</div><div class="hero-sub">Sollwert (angeforderter Prozentwert)</div></div>
 </div>
 <div class="hero-value" id="fan">-</div>
 <div class="meter"><div class="meter-fill" id="fanMeter"></div></div>
 <div class="hero-meta"><span id="fanMetaLeft">-</span><span id="fanMetaRight" class="muted"></span></div>
+<div class="muted small" id="fanFeedbackNote">Keine RPM-Rückmeldung vom Controller, nur der zuletzt geschriebene Wert wird angezeigt.</div>
 </div>
 
 <div class="hero-card">
@@ -126,13 +125,17 @@ Aktualisieren
 <div class="info-main">
 <div class="info-title">I²C Controller <span class="badge" id="modeBadge">-</span><span class="badge badge-neutral" id="profileBadge">-</span><span class="version-badge" id="infoVersion"></span></div>
 <div class="info-meta" id="infoMeta"></div>
+<div class="info-reason" id="reason">-</div>
 </div>
 <div class="info-status-wrap"><span class="dot" id="controllerDot"></span><span id="controller" class="info-status">-</span></div>
 </div>
 
-<div class="panel reason-panel">
-<div class="panel-head"><h2>Grund</h2></div>
-<div id="reason" class="reason">-</div>
+<div class="panel">
+<div class="panel-head"><div class="panel-head-title">
+<span class="icon-box"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 11.2V4.5a1.5 1.5 0 0 0-3 0v6.7a3 3 0 1 0 3 0Z"/><circle cx="10" cy="14" r="1" fill="currentColor" stroke="none"/></svg></span>
+<div><h2>Festplatten</h2><div class="muted small">Temperatur je HDD (Cache/SSD ausgeschlossen)</div></div>
+</div></div>
+<div class="disk-grid" id="diskGrid"><div class="muted small">Keine Festplatten erkannt.</div></div>
 </div>
 </section>
 
@@ -159,10 +162,15 @@ Aktualisieren
 <div class="panel-head">
 <div class="panel-head-title">
 <span class="icon-box"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="17" y2="6"/><circle cx="12" cy="6" r="1.6" fill="currentColor" stroke="none"/><line x1="3" y1="10" x2="17" y2="10"/><circle cx="7" cy="10" r="1.6" fill="currentColor" stroke="none"/><line x1="3" y1="14" x2="17" y2="14"/><circle cx="14" cy="14" r="1.6" fill="currentColor" stroke="none"/></svg></span>
-<div><h2>Manuell &amp; Test</h2><div class="muted small">Direkte Drehzahlvorgabe</div></div>
+<div><h2>Modus &amp; Test</h2><div class="muted small">Automatik, manuell oder Notfall; darunter ein Testlauf</div></div>
 </div>
 </div>
-<div class="controls-row">
+<div class="mode-switch" id="modeSwitch">
+<button type="button" class="mode-btn" data-set-mode="automatic">Automatik</button>
+<button type="button" class="mode-btn" data-set-mode="manual">Manuell</button>
+<button type="button" class="mode-btn mode-btn-danger" data-set-mode="emergency">Notfall</button>
+</div>
+<div class="controls-row" id="manualRow" hidden>
 <input id="percent" class="input num-input" type="number" min="1" max="100" value="75">
 <button id="setManual" class="pill-btn pill-primary" type="button">Setzen</button>
 </div>
@@ -173,7 +181,7 @@ Aktualisieren
 <button type="button" class="pill-btn pill-ghost" data-test="75">75 %</button>
 <button type="button" class="pill-btn pill-ghost" data-test="100">100 %</button>
 </div>
-<pre id="message" class="message"></pre>
+<pre id="message" class="message" hidden></pre>
 </div>
 
 </div>
@@ -187,14 +195,20 @@ Aktualisieren
 <span class="icon-box"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="16" x2="4" y2="11"/><line x1="10" y1="16" x2="10" y2="6"/><line x1="16" y1="16" x2="16" y2="13"/></svg></span>
 <div><h2>Temperatur</h2><div class="muted small">Maximale HDD-Temperatur</div></div>
 </div></div>
+<div class="chart-wrap">
 <canvas id="chartTemp" height="220"></canvas>
+<div class="chart-tooltip" id="chartTempTooltip" hidden></div>
+</div>
 </div>
 <div class="panel">
 <div class="panel-head"><div class="panel-head-title">
 <span class="icon-box"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="16" x2="4" y2="11"/><line x1="10" y1="16" x2="10" y2="6"/><line x1="16" y1="16" x2="16" y2="13"/></svg></span>
 <div><h2>Lüfterdrehzahl</h2><div class="muted small">Geschriebener Prozentwert</div></div>
 </div></div>
+<div class="chart-wrap">
 <canvas id="chartFan" height="220"></canvas>
+<div class="chart-tooltip" id="chartFanTooltip" hidden></div>
+</div>
 </div>
 </div>
 </section>
@@ -239,6 +253,63 @@ Aktualisieren
 </body>
 </html>`
 
+// LoginHTML is served unauthenticated at GET /login. It intentionally does
+// not load app.js (which assumes the dashboard DOM exists), loading its own
+// small login.js instead; the strict script-src (inherited from default-src
+// 'self', see securityHeaders) rules out an inline <script> here.
+const LoginHTML = `<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Anmelden – ZimaCube Fan Controller</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body class="login-body">
+<div class="login-shell">
+<form class="login-card" id="loginForm">
+<span class="brand-icon-box login-icon">
+<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="6.5"/><path d="M10 10L10 4.2M10 10L14.7 12.8M10 10L5.3 12.8"/><circle cx="10" cy="10" r="1.3" fill="currentColor" stroke="none"/></svg>
+</span>
+<h1 class="login-title">ZimaCube Fan Controller</h1>
+<div class="muted small login-sub">Bitte anmelden</div>
+<label class="login-label" for="loginUser">Benutzername</label>
+<input id="loginUser" class="input login-input" type="text" autocomplete="username" required>
+<label class="login-label" for="loginPassword">Passwort</label>
+<input id="loginPassword" class="input login-input" type="password" autocomplete="current-password" required>
+<button type="submit" class="pill-btn pill-primary login-submit">Anmelden</button>
+<div class="login-error" id="loginError" hidden></div>
+</form>
+</div>
+<script src="/login.js"></script>
+</body>
+</html>`
+
+const LoginJS = `"use strict";
+document.getElementById("loginForm").addEventListener("submit", async function (event) {
+  event.preventDefault();
+  var user = document.getElementById("loginUser").value;
+  var password = document.getElementById("loginPassword").value;
+  var errorBox = document.getElementById("loginError");
+  errorBox.hidden = true;
+  try {
+    var response = await fetch("/login", {
+      method: "POST",
+      headers: { Authorization: "Basic " + btoa(user + ":" + password) }
+    });
+    if (response.ok) {
+      window.location.href = "/";
+      return;
+    }
+    var body = await response.json().catch(function () { return {}; });
+    errorBox.textContent = body.error || "Anmeldung fehlgeschlagen.";
+    errorBox.hidden = false;
+  } catch (error) {
+    errorBox.textContent = String(error);
+    errorBox.hidden = false;
+  }
+});`
+
 const StyleCSS = `:root{
 color-scheme:dark;
 --bg:#0a0a10;
@@ -259,6 +330,19 @@ color-scheme:dark;
 --red:#ef4444;
 --radius-card:16px;
 --radius-control:10px;
+}
+:root[data-theme="light"]{
+color-scheme:light;
+--bg:#f4f4f8;
+--sidebar-bg:#ffffff;
+--card:#ffffff;
+--card-2:#f0f0f5;
+--border:#e3e3ec;
+--border-soft:#d4d4e2;
+--text:#16161f;
+--text-muted:#5c5c70;
+--text-dim:#8b8ba0;
+--purple-soft:rgba(139,92,246,.12);
 }
 *{box-sizing:border-box}
 html{scroll-behavior:smooth;background:var(--bg)}
@@ -299,12 +383,24 @@ color:var(--text-muted);text-decoration:none;font-size:.86rem;font-weight:550;
 border-left:2px solid transparent;
 }
 .side-link svg{width:16px;height:16px;flex:0 0 auto}
-.side-link:hover{background:#15151d;color:var(--text)}
-.side-link.active{background:var(--purple-soft);color:#fff;border-left-color:var(--purple)}
+.side-link:hover{background:var(--card-2);color:var(--text)}
+/* Deliberately squarer than the hover state: a thicker left rail and tight
+   corners read as an active tab, not another rounded pill. */
+.side-link.active{
+background:var(--purple-soft);color:var(--text);border-left:3px solid var(--purple);
+border-radius:4px;font-weight:650;
+}
 
 .sidebar-footer{margin-top:auto;display:flex;align-items:center;gap:10px;padding:14px 10px 4px;border-top:1px solid var(--border)}
 .sidebar-footer-title{font-size:.8rem;font-weight:650}
 .sidebar-footer-sub{font-size:.72rem;color:var(--text-muted)}
+.sidebar-logout{
+margin-left:auto;width:30px;height:30px;border-radius:8px;flex:0 0 auto;
+border:1px solid transparent;background:transparent;color:var(--text-dim);
+display:flex;align-items:center;justify-content:center;cursor:pointer;
+}
+.sidebar-logout svg{width:16px;height:16px}
+.sidebar-logout:hover{background:var(--card-2);color:var(--red);border-color:var(--border-soft)}
 
 .content{flex:1;min-width:0;padding:26px 32px 60px;display:flex;flex-direction:column;gap:26px}
 
@@ -333,13 +429,40 @@ font:inherit;font-weight:650;font-size:.85rem;cursor:pointer;
 .table-action{padding:6px 12px;font-size:.78rem}
 
 .input{
-border-radius:var(--radius-control);border:1px solid var(--border-soft);background:#0d0d13;
+border-radius:var(--radius-control);border:1px solid var(--border-soft);background:var(--card-2);
 color:var(--text);padding:9px 12px;font:inherit;
 }
 .input:focus{outline:2px solid var(--purple);outline-offset:-1px}
-.token-input{min-width:170px}
 .num-input{width:90px}
 .filter-input{width:200px}
+
+.theme-toggle{
+width:38px;height:38px;border-radius:10px;flex:0 0 auto;
+border:1px solid var(--border-soft);background:var(--card-2);color:var(--text);
+display:flex;align-items:center;justify-content:center;cursor:pointer;
+}
+.theme-toggle svg{width:18px;height:18px}
+.theme-toggle:hover{border-color:var(--text-dim)}
+.theme-toggle .icon-moon{display:none}
+:root[data-theme="light"] .theme-toggle .icon-sun{display:none}
+:root[data-theme="light"] .theme-toggle .icon-moon{display:block}
+
+.mode-switch{display:flex;gap:2px;background:var(--card-2);border:1px solid var(--border-soft);border-radius:var(--radius-control);padding:3px}
+.mode-btn{
+flex:1;padding:9px 10px;border:none;background:transparent;color:var(--text-muted);
+font:inherit;font-weight:650;font-size:.85rem;border-radius:7px;cursor:pointer;
+}
+.mode-btn:hover{color:var(--text)}
+.mode-btn.active{background:var(--purple);color:#fff}
+.mode-btn-danger.active{background:var(--red)}
+
+.disk-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.disk-tile{
+border:1px solid var(--border);border-radius:12px;padding:10px 12px;background:var(--card-2);
+}
+.disk-tile-name{font-size:.78rem;font-weight:650;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.disk-tile-value{font-size:1.3rem;font-weight:700;margin-top:2px}
+.disk-tile-value.standby{color:var(--text-dim);font-size:.95rem;font-weight:650}
 
 .banner{
 margin:0;padding:12px 16px;border-radius:12px;
@@ -381,6 +504,7 @@ background:var(--card);border:1px solid var(--border);border-radius:var(--radius
 .info-meta{display:flex;flex-wrap:wrap;margin-top:6px;font-size:.78rem;color:var(--text-muted)}
 .info-meta span{padding-right:12px;margin-right:12px;border-right:1px solid var(--border)}
 .info-meta span:last-child{border-right:none;padding-right:0;margin-right:0}
+.info-reason{margin-top:6px;color:var(--text-muted);font-size:.82rem}
 .info-status-wrap{display:flex;align-items:center}
 .info-status{font-weight:650;font-size:.85rem}
 
@@ -398,11 +522,9 @@ font-size:.72rem;font-weight:650;margin-left:8px;
 .dot-bad{background:var(--red);box-shadow:0 0 0 3px rgba(239,68,68,.16)}
 
 .panel{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-card);padding:18px 20px}
-.reason-panel{padding:16px 20px}
 .panel-head{margin-bottom:12px}
 .panel-head-row{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
 .panel-head-title{display:flex;align-items:center;gap:12px}
-.reason{color:var(--text-muted)}
 
 .controls-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px}
 .controls-row:first-child{margin-top:0}
@@ -415,7 +537,15 @@ font-size:.72rem;font-weight:650;margin-left:8px;
 
 .chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media (max-width:860px){.chart-grid{grid-template-columns:1fr}}
+.chart-wrap{position:relative}
 canvas{width:100%;display:block}
+.chart-tooltip{
+position:absolute;pointer-events:none;z-index:2;
+background:var(--card-2);border:1px solid var(--border-soft);border-radius:8px;
+padding:6px 10px;font-size:.76rem;color:var(--text);white-space:nowrap;
+transform:translate(-50%,-115%);box-shadow:0 4px 14px rgba(0,0,0,.25);
+}
+.chart-tooltip[hidden]{display:none}
 
 .table-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:.85rem}
@@ -424,11 +554,27 @@ text-align:left;color:var(--text-muted);font-weight:600;font-size:.76rem;
 text-transform:uppercase;letter-spacing:.03em;padding:0 10px 10px;border-bottom:1px solid var(--border);
 }
 td{padding:10px;border-bottom:1px solid var(--border);color:var(--text)}
-tbody tr:hover{background:#16161e}
+tbody tr:hover{background:var(--card-2)}
 tbody tr:last-child td{border-bottom:none}
 .table-footer{padding:10px 2px 0}
 
 .config-editor{width:100%;min-height:220px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.82rem;resize:vertical}
+
+.login-body{display:flex;min-height:100vh;align-items:center;justify-content:center;padding:20px}
+.login-shell{width:100%;max-width:360px}
+.login-card{
+display:flex;flex-direction:column;gap:4px;
+background:var(--card);border:1px solid var(--border);border-radius:var(--radius-card);
+padding:32px 28px;text-align:center;
+}
+.login-icon{margin:0 auto 14px}
+.login-title{font-size:1.15rem}
+.login-sub{margin-bottom:18px}
+.login-label{text-align:left;font-size:.78rem;color:var(--text-muted);font-weight:650;margin:10px 0 4px}
+.login-input{width:100%}
+.login-submit{width:100%;justify-content:center;margin-top:18px}
+.login-error{color:#fca5a5;font-size:.82rem;margin-top:12px}
+.login-error[hidden]{display:none}
 
 @media (max-width:900px){
 .shell{flex-direction:column}
@@ -446,45 +592,71 @@ flex-direction:row;align-items:center;gap:18px;padding:14px 16px;overflow-x:auto
 
 const ScriptJS = `"use strict";
 var byId = function (id) { return document.getElementById(id); };
-var tokenKey = "zimafan-token";
+var themeKey = "zimafan-theme";
 var configDirty = false;
 var lastEvents = [];
 var lastProfiles = [];
 var activeProfileName = "";
 var activeEmergencyTemp = 52;
+var manualRowOpen = false;
+var messageTimer = null;
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme === "light" ? "light" : "dark";
+}
+applyTheme(localStorage.getItem(themeKey));
 
 var themeColors = getComputedStyle(document.documentElement);
 var colorFan = themeColors.getPropertyValue("--blue").trim() || "#3b82f6";
 var colorTemp = themeColors.getPropertyValue("--purple").trim() || "#8b5cf6";
 
-function token() { return byId("token").value.trim(); }
-
-function headers(withBody) {
-  var result = {};
-  var value = token();
-  if (value) { result["X-API-Token"] = value; }
-  if (withBody) { result["Content-Type"] = "application/json"; }
-  return result;
+function toggleTheme() {
+  var next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+  localStorage.setItem(themeKey, next);
+  applyTheme(next);
+  refreshHistory();
 }
 
-function say(text) { byId("message").textContent = text; }
+// Shown for 4s and then cleared automatically, so a stale confirmation (e.g.
+// "{"status":"auto requested"}") does not sit on screen forever.
+function say(text) {
+  var box = byId("message");
+  box.textContent = text;
+  box.hidden = !text;
+  if (messageTimer) { clearTimeout(messageTimer); }
+  if (text) {
+    messageTimer = setTimeout(function () { box.hidden = true; box.textContent = ""; }, 4000);
+  }
+}
 
 async function getJSON(url) {
   var response = await fetch(url, { cache: "no-store" });
+  if (response.status === 401) { window.location.href = "/login"; throw new Error("nicht angemeldet"); }
   var text = await response.text();
   if (!response.ok) { throw new Error(response.status + ": " + text); }
   return JSON.parse(text);
+}
+
+// Turns a JSON API response into a short, human message instead of dumping
+// the raw payload: the error field on failure, otherwise a plain confirmation.
+async function describeResponse(response) {
+  var text = await response.text();
+  var parsed = null;
+  try { parsed = JSON.parse(text); } catch (error) { /* not JSON, fall through */ }
+  if (parsed && parsed.error) { return parsed.error; }
+  if (response.ok) { return "Erledigt."; }
+  return response.status + ": " + text;
 }
 
 async function post(path, body) {
   try {
     var response = await fetch(path, {
       method: "POST",
-      headers: headers(Boolean(body)),
+      headers: body ? { "Content-Type": "application/json" } : {},
       body: body ? JSON.stringify(body) : undefined
     });
-    say(await response.text());
-    if (response.status === 401) { say("Nicht autorisiert: API-Token prüfen."); }
+    if (response.status === 401) { window.location.href = "/login"; return false; }
+    say(await describeResponse(response));
     setTimeout(refreshAll, 400);
     return response.ok;
   } catch (error) {
@@ -555,9 +727,11 @@ async function refreshStatus() {
   byId("version").textContent = status.version ? "v" + status.version : "";
   byId("infoVersion").textContent = status.version ? "v" + status.version : "";
 
-  byId("fan").textContent = status.fan_percent + " %";
-  byId("fanMeter").style.width = clampPct(status.fan_percent) + "%";
-  byId("fanMetaLeft").textContent = status.fan_percent + " %";
+  byId("fan").textContent = status.target_percent + " %";
+  byId("fanMeter").style.width = clampPct(status.target_percent) + "%";
+  var appliedText = "Ist: " + status.last_applied_percent + " %";
+  if (!status.last_write_successful) { appliedText += " (letzter Schreibversuch fehlgeschlagen)"; }
+  byId("fanMetaLeft").textContent = appliedText;
   byId("fanMetaRight").textContent = labelForMode(status.mode);
 
   var tempRatio = status.temperature_valid ? clampPct(Math.round((status.maximum_disk_temperature / activeEmergencyTemp) * 100)) : null;
@@ -606,6 +780,56 @@ async function refreshStatus() {
 
   activeProfileName = status.active_profile || "";
   renderProfileTable();
+  renderDiskGrid(status.disks);
+  applyModeState((data.override && data.override.mode) || "");
+}
+
+function renderDiskGrid(disks) {
+  var grid = byId("diskGrid");
+  grid.textContent = "";
+  if (!disks || disks.length === 0) {
+    var empty = document.createElement("div");
+    empty.className = "muted small";
+    empty.textContent = "Keine Festplatten erkannt.";
+    grid.appendChild(empty);
+    return;
+  }
+  disks.forEach(function (disk) {
+    var tile = document.createElement("div");
+    tile.className = "disk-tile";
+
+    var name = document.createElement("div");
+    name.className = "disk-tile-name";
+    name.textContent = disk.name || "-";
+    tile.appendChild(name);
+
+    var value = document.createElement("div");
+    if (disk.valid) {
+      value.className = "disk-tile-value";
+      value.textContent = disk.temperature + " °C";
+    } else {
+      value.className = "disk-tile-value standby";
+      value.textContent = "Standby";
+    }
+    tile.appendChild(value);
+
+    grid.appendChild(tile);
+  });
+}
+
+// The segmented mode control reflects the requested override (empty/"" means
+// automatic), not the resulting live status.mode, which can show
+// "array-boost"/"failsafe" from safety logic while the operator's own choice
+// is still "automatic". The manual row, once opened, stays open until the
+// operator picks a different mode, so mid-typing it does not vanish on the
+// next 3s status poll.
+function applyModeState(overrideMode) {
+  var mode = overrideMode || "automatic";
+  if (mode === "manual") { manualRowOpen = true; }
+  document.querySelectorAll(".mode-btn").forEach(function (btn) {
+    btn.classList.toggle("active", btn.dataset.setMode === mode);
+  });
+  byId("manualRow").hidden = !manualRowOpen;
 }
 
 function renderProfileTable() {
@@ -715,6 +939,7 @@ function drawArea(canvas, points, valueKey, color, minFloor, maxFloor, suffix) {
   if (!points || points.length < 2) {
     ctx.fillStyle = "#6d6d80";
     ctx.fillText("Noch keine Messpunkte", 12, height / 2);
+    canvas._tooltip = null;
     return;
   }
 
@@ -771,6 +996,31 @@ function drawArea(canvas, points, valueKey, color, minFloor, maxFloor, suffix) {
   ctx.fillText(new Date(points[0].time).toLocaleString(), padLeft, height - 4);
   var last = new Date(points[points.length - 1].time).toLocaleString();
   ctx.fillText(last, Math.max(padLeft, width - padRight - ctx.measureText(last).width), height - 4);
+
+  // Remembered so a mousemove handler (see wire()) can find the nearest
+  // point by x position and show its exact value, without redrawing.
+  canvas._tooltip = { points: points, valueKey: valueKey, suffix: suffix, px: points.map(function (_, index) { return px(index); }) };
+}
+
+function showChartTooltip(canvas, tooltip, clientX, clientY) {
+  var data = canvas._tooltip;
+  if (!data) { tooltip.hidden = true; return; }
+
+  var rect = canvas.getBoundingClientRect();
+  var x = clientX - rect.left;
+  var nearest = 0;
+  var nearestDist = Infinity;
+  data.px.forEach(function (px, index) {
+    var dist = Math.abs(px - x);
+    if (dist < nearestDist) { nearestDist = dist; nearest = index; }
+  });
+
+  var point = data.points[nearest];
+  var value = point[data.valueKey];
+  tooltip.textContent = new Date(point.time).toLocaleString() + " – " + value + data.suffix;
+  tooltip.style.left = (clientX - rect.left) + "px";
+  tooltip.style.top = (clientY - rect.top) + "px";
+  tooltip.hidden = false;
 }
 
 async function saveConfig() {
@@ -812,11 +1062,37 @@ function setupSectionObserver() {
   sections.forEach(function (section) { observer.observe(section); });
 }
 
+function wireChartTooltip(canvasId, tooltipId) {
+  var canvas = byId(canvasId);
+  var tooltip = byId(tooltipId);
+  canvas.addEventListener("mousemove", function (event) {
+    showChartTooltip(canvas, tooltip, event.clientX, event.clientY);
+  });
+  canvas.addEventListener("mouseleave", function () { tooltip.hidden = true; });
+}
+
 function wire() {
-  var stored = sessionStorage.getItem(tokenKey);
-  if (stored) { byId("token").value = stored; }
-  byId("token").addEventListener("change", function () {
-    sessionStorage.setItem(tokenKey, token());
+  byId("themeToggle").addEventListener("click", toggleTheme);
+
+  byId("logout").addEventListener("click", async function () {
+    await fetch("/logout", { method: "POST" });
+    window.location.href = "/login";
+  });
+
+  document.querySelectorAll(".mode-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var mode = btn.dataset.setMode;
+      if (mode === "manual") {
+        manualRowOpen = true;
+        byId("manualRow").hidden = false;
+        document.querySelectorAll(".mode-btn").forEach(function (b) { b.classList.toggle("active", b === btn); });
+        byId("percent").focus();
+        return;
+      }
+      manualRowOpen = false;
+      byId("manualRow").hidden = true;
+      post(mode === "emergency" ? "/api/mode/emergency" : "/api/mode/auto");
+    });
   });
 
   byId("refresh").addEventListener("click", function () { refreshAll(); });
@@ -828,14 +1104,14 @@ function wire() {
   byId("config").addEventListener("input", function () { configDirty = true; });
   byId("eventFilter").addEventListener("input", renderEvents);
 
-  document.querySelectorAll("[data-post]").forEach(function (button) {
-    button.addEventListener("click", function () { post(button.dataset.post); });
-  });
   document.querySelectorAll("[data-test]").forEach(function (button) {
     button.addEventListener("click", function () {
       post("/api/test/" + encodeURIComponent(button.dataset.test));
     });
   });
+
+  wireChartTooltip("chartTemp", "chartTempTooltip");
+  wireChartTooltip("chartFan", "chartFanTooltip");
 
   window.addEventListener("resize", function () { refreshHistory(); });
   setupSectionObserver();

@@ -1,5 +1,93 @@
 # Changelog
 
+## 4.0.0
+
+### Breaking
+
+- `API_TOKEN` entfällt vollständig, ersetzt durch einen Login
+  (`ADMIN_USER`/`ADMIN_PASSWORD`). **Vor dem Update:** `ADMIN_PASSWORD` in
+  der Stack-Umgebung setzen, sonst ist das Dashboard nach dem Update offen
+  erreichbar (Login ist ohne gesetztes Passwort bewusst deaktiviert, damit
+  ein frischer Deploy nicht aussperrt). `scripts/fanctl` loggt sich jetzt
+  automatisch mit denselben Variablen ein, ein alter `API_TOKEN`-Eintrag in
+  der Stack-Konfiguration wird ignoriert
+
+### Neu und verbessert
+
+- Login-Maske schützt das gesamte Dashboard (Session-Cookie, 24h gleitend,
+  bcrypt-Hash des Passworts, striktes Rate-Limit gegen Brute-Force);
+  `GET /api/health` bleibt für Docker-Healthcheck und externes Monitoring
+  ohne Login erreichbar
+- Neue Kachel je HDD-Temperatur; Cache-/Flash-Geräte in `disks.ini` zählen
+  nicht mehr zu `disks_reporting`/`maximum_disk_temperature` (konnten bisher
+  eine SSD/NVMe-Cache-Temperatur in die Lüfterkurve einrechnen)
+- Hell/Dunkel-Umschalter oben im Header (Standard: dunkel)
+- Automatik/Manuell/Notfall sind jetzt eine einzige, den aktuellen Modus
+  hervorhebende Leiste statt über Header-Buttons und ein separates
+  Eingabefeld verteilt
+- Verlaufs-Charts zeigen beim Hover den exakten Wert und Zeitpunkt
+- Bestätigungsmeldungen nach einer Aktion sind lesbar formuliert und blenden
+  sich nach 4 Sekunden automatisch aus, statt dauerhaft als Roh-JSON stehen
+  zu bleiben
+- "Grund" ist jetzt Teil der Controller-Statuskarte statt einer isoliert
+  wirkenden eigenen Kachel
+- README vollständig auf Englisch, inklusive aller Funktionen seit 3.1.0
+
+## 3.2.0
+
+### Behoben
+
+- `setOverride` schrieb den internen Zustand, bevor `override.json`
+  gespeichert war; schlug das Speichern fehl, blieb der Override trotzdem
+  aktiv. Persistenz läuft jetzt zuerst, `setOverride` gibt einen Fehler
+  zurück, die betroffenen Endpunkte antworten mit HTTP 500
+- Derselbe Fehler betraf `handleConfigUpdate` und `handleProfile`
+  (Speicher-Update vor Persistenz mit Revert-Versuch bei Fehlschlag);
+  beide persistieren jetzt zuerst
+- Ein manueller Lüftertest konnte die Drehzahl unter das aktuelle
+  Notfall-, Failsafe- oder Array-Boost-Minimum schreiben; unsichere
+  Testwerte werden jetzt mit HTTP 409 abgelehnt
+- Persistenzfehler von `AppendHistory`/`AppendEvent` wurden verschluckt;
+  sie werden jetzt geloggt und fließen in `/api/health` ein
+
+### Sicherheit
+
+- Konfiguration und Override aus `config.json`/`override.json` werden mit
+  `DisallowUnknownFields` und einer EOF-Prüfung geladen, unbekannte Felder
+  oder Daten nach dem JSON-Objekt werden abgelehnt (gilt auch für
+  `POST /api/config`)
+- Schreibende Endpunkte sind pro Kategorie (Override, Profil, Konfiguration,
+  Test) auf einen Schreibvorgang pro Sekunde begrenzt; ein Lüftertest lässt
+  zusätzlich nur einen aktiven Test gleichzeitig zu und hat einen eigenen
+  5-Sekunden-Cooldown
+- Profil-, Konfigurations- und Override-Änderungen sind über einen
+  eigenen Mutex serialisiert, sodass sich nebenläufige Anfragen nicht mehr
+  gegenseitig überschreiben können
+
+### Neu und verbessert
+
+- `/api/status` liefert `target_percent`, `last_applied_percent` und
+  `feedback_available` getrennt von `fan_percent` (bleibt als Alias
+  erhalten); das Dashboard zeigt jetzt Soll- und Ist-Wert getrennt und weist
+  darauf hin, dass der Controller keine RPM-Rückmeldung liefert
+  (`last_applied_percent` ändert sich nur bei einem tatsächlich
+  erfolgreichen I²C-Schreibvorgang)
+  - `/api/health` liefert zusätzlich `status`, `controller`, `config` und
+  `storage` als einzelne Prüfungen statt nur eines Gesamt-`healthy`
+- `REAPPLY_INTERVAL_SECONDS` (Default 300) schreibt die aktive PWM
+  regelmäßig erneut, auch ohne Wertänderung, und zusätzlich sofort nach
+  einer erfolgreichen Controller-Neuerkennung; nach einem fehlgeschlagenen
+  Schreibversuch wird bereits nach 10 statt nach 300 Sekunden erneut
+  versucht
+- `config.json` trägt jetzt `config_version`; fehlt das Feld (ältere
+  Installationen), wird stillschweigend Version 1 angenommen, eine höhere
+  Version als von diesem Binary unterstützt wird abgelehnt
+- CI: `golangci-lint` ist auf `v1.64.2` gepinnt statt `latest`,
+  `go mod tidy` samt `git diff --exit-code` hält `go.mod`/`go.sum`
+  konsistent, `docker compose config` prüft die Compose-Datei
+- `docker-compose.yml` setzt `stop_grace_period: 20s`, damit die
+  Abschaltdrehzahl vor einem `SIGKILL` sicher geschrieben werden kann
+
 ## 3.1.1
 
 ### Behoben

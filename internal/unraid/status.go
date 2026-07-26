@@ -20,6 +20,28 @@ const (
 	OperationUnknown = "unknown"
 )
 
+// Disk describes one array member's live state, one disks.ini section.
+type Disk struct {
+	Name        string
+	Type        string // e.g. DATA, PARITY, CACHE, FLASH; empty if the field is absent
+	Temperature int
+	Valid       bool // false if spun down ("*") or unparseable
+}
+
+// IsHDD reports whether this disk should count toward the HDD temperature
+// aggregate and appear in the per-disk list. Cache pools and the boot flash
+// drive are typically SSD/NVMe and are excluded; everything else (DATA,
+// PARITY, and sections with no type= field at all, e.g. older Unraid
+// versions) counts, which is the safe default when the field is missing.
+func (d Disk) IsHDD() bool {
+	switch strings.ToUpper(strings.TrimSpace(d.Type)) {
+	case "CACHE", "FLASH":
+		return false
+	default:
+		return true
+	}
+}
+
 // DiskTemperatures separates "no disk is warm" from "the file could not be
 // understood". The old code returned 0 for both, which made a missing
 // disks.ini look like an idle array and dropped the fans to the lowest step.
@@ -27,11 +49,28 @@ type DiskTemperatures struct {
 	Maximum   int
 	Reporting int
 	Parsed    int
+	// Disks holds every HDD section (see Disk.IsHDD), in file order. Cache
+	// and flash devices are already filtered out here.
+	Disks []Disk
 }
 
 // ReadDiskTemperatures collects the temp= entries from an Unraid disks.ini.
 // An error means the caller must treat the temperature as unknown and fall
 // back to a safe fan speed.
+//
+// disks.ini groups fields into sections, one per device:
+//
+//	["disk1"]
+//	name="disk1"
+//	type="DATA"
+//	temp="35"
+//
+// Sections are tracked so that name/type/temp are attributed to the right
+// disk instead of overwriting each other in a flat map, and so cache/flash
+// devices can be excluded from the HDD aggregate (Maximum/Reporting/Parsed)
+// and from Disks. Any temp= line seen before the first section header (no
+// real disks.ini does this, but a handful of tests exercise it) is treated
+// as one anonymous, type-less disk, which defaults to counting as an HDD.
 func ReadDiskTemperatures(path string) (DiskTemperatures, error) {
 	var result DiskTemperatures
 
@@ -41,29 +80,66 @@ func ReadDiskTemperatures(path string) (DiskTemperatures, error) {
 	}
 	defer func() { _ = file.Close() }()
 
+	current := Disk{}
+	sawTemp := false
+
+	flush := func() {
+		if !sawTemp {
+			current = Disk{}
+			return
+		}
+		if current.IsHDD() {
+			result.Reporting++
+			if current.Valid {
+				result.Parsed++
+				if current.Temperature > result.Maximum {
+					result.Maximum = current.Temperature
+				}
+			}
+			result.Disks = append(result.Disks, current)
+		}
+		current = Disk{}
+		sawTemp = false
+	}
+
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		if !strings.HasPrefix(line, "temp=") {
+		if line == "" {
 			continue
 		}
-		result.Reporting++
-
-		raw := strings.TrimSpace(strings.Trim(strings.TrimPrefix(line, "temp="), "\""))
-		temperature, err := strconv.Atoi(raw)
-		if err != nil {
-			// Spun down disks report temp="*".
-			continue
-		}
-		if temperature < minTemperature || temperature > maxTemperature {
+		if strings.HasPrefix(line, "[") {
+			flush()
+			current.Name = strings.Trim(strings.Trim(line, "[]"), "\"")
 			continue
 		}
 
-		result.Parsed++
-		if temperature > result.Maximum {
-			result.Maximum = temperature
+		key, value, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		value = strings.Trim(strings.TrimSpace(value), "\"")
+
+		switch strings.TrimSpace(key) {
+		case "name":
+			if value != "" {
+				current.Name = value
+			}
+		case "type":
+			current.Type = value
+		case "temp":
+			sawTemp = true
+			temperature, err := strconv.Atoi(value)
+			// A parse failure means the disk is spun down (temp="*") or the
+			// field is otherwise unusable; current.Valid simply stays false.
+			if err == nil && temperature >= minTemperature && temperature <= maxTemperature {
+				current.Temperature = temperature
+				current.Valid = true
+			}
 		}
 	}
+	flush()
+
 	if err := scanner.Err(); err != nil {
 		return result, err
 	}

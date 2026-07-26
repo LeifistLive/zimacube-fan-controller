@@ -2,10 +2,10 @@ package app
 
 import (
 	"context"
-	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -16,12 +16,24 @@ import (
 	"github.com/LeifistLive/zimacube-fan-controller/internal/webui"
 )
 
+// fanTestCooldown keeps repeated fan tests from spinning the fans up and down
+// back to back; testMu additionally ensures only one test runs at a time.
+const fanTestCooldown = 5 * time.Second
+
 func (a *App) Routes() http.Handler {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
-		serveAsset(w, "text/html; charset=utf-8", webui.IndexHTML)
+	// Unauthenticated: the login page and endpoint themselves, and the
+	// static assets both the login page and the dashboard need. /api/health
+	// stays open too, for the Docker healthcheck and external monitoring
+	// (Uptime Kuma etc.) that cannot log in.
+	mux.HandleFunc("GET /login", a.handleLoginPage)
+	mux.HandleFunc("POST /login", a.handleLogin)
+	mux.HandleFunc("POST /logout", a.handleLogout)
+	mux.HandleFunc("GET /login.js", func(w http.ResponseWriter, r *http.Request) {
+		serveAsset(w, "text/javascript; charset=utf-8", webui.LoginJS)
 	})
+	mux.HandleFunc("GET /api/health", a.handleHealth)
 	mux.HandleFunc("GET /app.css", func(w http.ResponseWriter, r *http.Request) {
 		serveAsset(w, "text/css; charset=utf-8", webui.StyleCSS)
 	})
@@ -29,18 +41,22 @@ func (a *App) Routes() http.Handler {
 		serveAsset(w, "text/javascript; charset=utf-8", webui.ScriptJS)
 	})
 
-	mux.HandleFunc("GET /api/status", a.handleStatus)
-	mux.HandleFunc("GET /api/health", a.handleHealth)
-	mux.HandleFunc("GET /api/history", a.handleHistory)
-	mux.HandleFunc("GET /api/events", a.handleEvents)
-	mux.HandleFunc("GET /api/config", a.handleConfig)
+	// Everything else requires a valid session (see auth.go).
+	mux.HandleFunc("GET /{$}", a.requireAuth(func(w http.ResponseWriter, r *http.Request) {
+		serveAsset(w, "text/html; charset=utf-8", webui.IndexHTML)
+	}))
 
-	mux.HandleFunc("POST /api/fan/{percent}", a.guardWrite(a.handleManual))
-	mux.HandleFunc("POST /api/mode/auto", a.guardWrite(a.handleAuto))
-	mux.HandleFunc("POST /api/mode/emergency", a.guardWrite(a.handleEmergency))
-	mux.HandleFunc("POST /api/profile/{name}", a.guardWrite(a.handleProfile))
-	mux.HandleFunc("POST /api/config", a.guardWrite(a.handleConfigUpdate))
-	mux.HandleFunc("POST /api/test/{percent}", a.guardWrite(a.handleFanTest))
+	mux.HandleFunc("GET /api/status", a.requireAuth(a.handleStatus))
+	mux.HandleFunc("GET /api/history", a.requireAuth(a.handleHistory))
+	mux.HandleFunc("GET /api/events", a.requireAuth(a.handleEvents))
+	mux.HandleFunc("GET /api/config", a.requireAuth(a.handleConfig))
+
+	mux.HandleFunc("POST /api/fan/{percent}", a.requireAuth(a.guardWrite("override", a.handleManual)))
+	mux.HandleFunc("POST /api/mode/auto", a.requireAuth(a.guardWrite("override", a.handleAuto)))
+	mux.HandleFunc("POST /api/mode/emergency", a.requireAuth(a.guardWrite("override", a.handleEmergency)))
+	mux.HandleFunc("POST /api/profile/{name}", a.requireAuth(a.guardWrite("profile", a.handleProfile)))
+	mux.HandleFunc("POST /api/config", a.requireAuth(a.guardWrite("config", a.handleConfigUpdate)))
+	mux.HandleFunc("POST /api/test/{percent}", a.requireAuth(a.guardWrite("test", a.handleFanTest)))
 
 	return securityHeaders(mux)
 }
@@ -64,20 +80,15 @@ func securityHeaders(next http.Handler) http.Handler {
 	})
 }
 
-// guardWrite protects every write endpoint. The origin check blocks browser
-// based cross site requests even when no API token is configured.
-func (a *App) guardWrite(next http.HandlerFunc) http.HandlerFunc {
+// guardWrite rate-limits a write endpoint by category, independently of
+// every other category (a profile change never blocks a fan test or vice
+// versa). Authentication and the same-origin check already happened in
+// requireAuth, which always wraps guardWrite, never the other way round.
+func (a *App) guardWrite(category string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if err := checkSameOrigin(r); err != nil {
-			writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
+		if !a.writeLimiters[category].Allow(time.Now(), time.Second) {
+			writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "zu viele Anfragen, bitte kurz warten"})
 			return
-		}
-		if a.cfg.APIToken != "" {
-			provided := r.Header.Get("X-API-Token")
-			if subtle.ConstantTimeCompare([]byte(provided), []byte(a.cfg.APIToken)) != 1 {
-				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
-				return
-			}
 		}
 		next(w, r)
 	}
@@ -112,22 +123,35 @@ func (a *App) handleStatus(w http.ResponseWriter, _ *http.Request) {
 func (a *App) handleHealth(w http.ResponseWriter, _ *http.Request) {
 	a.mu.RLock()
 	status := a.status
+	_, configOK := a.runtime.Profiles[a.runtime.ActiveProfile]
 	a.mu.RUnlock()
 
 	stale := status.Updated.IsZero() || time.Since(status.Updated) > 2*a.cfg.CheckInterval+10*time.Second
-	healthy := status.ControllerOnline && status.LastWriteSuccessful && status.TemperatureValid && !stale
+	storageOK := a.storageHealthy()
+	healthy := status.ControllerOnline && status.LastWriteSuccessful && status.TemperatureValid &&
+		configOK && storageOK && !stale
+
+	label := "unhealthy"
+	if healthy {
+		label = "healthy"
+	}
 
 	code := http.StatusOK
 	if !healthy {
 		code = http.StatusServiceUnavailable
 	}
 	writeJSON(w, code, map[string]any{
-		"healthy":           healthy,
-		"version":           Version,
-		"controller_online": status.ControllerOnline,
-		"temperature_valid": status.TemperatureValid,
-		"stale":             stale,
-		"updated":           status.Updated,
+		"healthy":               healthy,
+		"status":                label,
+		"version":               Version,
+		"controller":            status.ControllerOnline,
+		"controller_online":     status.ControllerOnline,
+		"config":                configOK,
+		"last_write_successful": status.LastWriteSuccessful,
+		"storage":               storageOK,
+		"temperature_valid":     status.TemperatureValid,
+		"stale":                 stale,
+		"updated":               status.Updated,
 	})
 }
 
@@ -158,30 +182,41 @@ func (a *App) handleConfig(w http.ResponseWriter, _ *http.Request) {
 
 func (a *App) handleConfigUpdate(w http.ResponseWriter, r *http.Request) {
 	var incoming RuntimeConfig
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10)).Decode(&incoming); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "ungültiges JSON"})
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&incoming); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "ungültiges JSON: " + err.Error()})
 		return
 	}
+	if err := decoder.Decode(new(json.RawMessage)); !errors.Is(err, io.EOF) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unerwartete Daten nach dem JSON-Objekt"})
+		return
+	}
+
 	normalized, err := normalizeRuntimeConfig(incoming)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
 
-	a.mu.Lock()
-	previous := a.runtime
-	a.runtime = normalized
-	a.invalidateFanStateLocked()
-	a.mu.Unlock()
+	// Serialized against profile changes and overrides: validate -> persist
+	// -> update memory -> trigger. Persisting before touching in-memory state
+	// means a failed write leaves the running config untouched, no revert
+	// needed.
+	a.configMu.Lock()
+	defer a.configMu.Unlock()
 
 	if err := a.store.SaveJSON(configFile, normalized); err != nil {
-		a.mu.Lock()
-		a.runtime = previous
-		a.invalidateFanStateLocked()
-		a.mu.Unlock()
+		a.setStorageOK(false)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
+	a.setStorageOK(true)
+
+	a.mu.Lock()
+	a.runtime = normalized
+	a.invalidateFanStateLocked()
+	a.mu.Unlock()
 
 	a.trigger()
 	writeJSON(w, http.StatusAccepted, normalized)
@@ -193,43 +228,58 @@ func (a *App) handleManual(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}
-	a.setOverride(Override{Mode: ModeManual, Percent: percent})
+	if err := a.setOverride(Override{Mode: ModeManual, Percent: percent}); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
 	writeJSON(w, http.StatusAccepted, map[string]any{"status": "manual requested", "percent": percent})
 }
 
 func (a *App) handleAuto(w http.ResponseWriter, _ *http.Request) {
-	a.setOverride(Override{})
+	if err := a.setOverride(Override{}); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "auto requested"})
 }
 
 func (a *App) handleEmergency(w http.ResponseWriter, _ *http.Request) {
-	a.setOverride(Override{Mode: ModeEmergency})
+	if err := a.setOverride(Override{Mode: ModeEmergency}); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "emergency requested"})
 }
 
 func (a *App) handleProfile(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 
-	a.mu.Lock()
-	if _, ok := a.runtime.Profiles[name]; !ok {
-		a.mu.Unlock()
+	// Serialized against config updates and overrides, same validate ->
+	// persist -> update memory -> trigger flow as handleConfigUpdate.
+	a.configMu.Lock()
+	defer a.configMu.Unlock()
+
+	a.mu.RLock()
+	_, ok := a.runtime.Profiles[name]
+	candidate := a.runtime
+	a.mu.RUnlock()
+	if !ok {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "Profil nicht gefunden"})
 		return
 	}
-	previous := a.runtime.ActiveProfile
-	a.runtime.ActiveProfile = name
-	a.invalidateFanStateLocked()
-	runtime := a.runtime
-	a.mu.Unlock()
+	candidate.ActiveProfile = name
 
-	if err := a.store.SaveJSON(configFile, runtime); err != nil {
-		a.mu.Lock()
-		a.runtime.ActiveProfile = previous
-		a.invalidateFanStateLocked()
-		a.mu.Unlock()
+	if err := a.store.SaveJSON(configFile, candidate); err != nil {
+		a.setStorageOK(false)
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
+	a.setStorageOK(true)
+
+	a.mu.Lock()
+	a.runtime.ActiveProfile = name
+	a.invalidateFanStateLocked()
+	a.mu.Unlock()
 
 	a.trigger()
 	writeJSON(w, http.StatusAccepted, map[string]string{"active_profile": name})
@@ -242,12 +292,43 @@ func (a *App) handleFanTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Only one fan test may run at a time; TryLock rejects a second request
+	// immediately instead of queuing behind the first (a test in flight is
+	// only a few seconds, but stacking them would defeat the point of a
+	// controlled test).
+	if !a.testMu.TryLock() {
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "Lüftertest läuft bereits"})
+		return
+	}
+	defer a.testMu.Unlock()
+
+	now := time.Now()
+	if now.Before(a.testCooldownUntil) {
+		writeJSON(w, http.StatusTooManyRequests, map[string]string{"error": "Lüftertest im Cooldown, bitte kurz warten"})
+		return
+	}
+
+	a.mu.RLock()
+	profile, profileFound := a.runtime.Profiles[a.runtime.ActiveProfile]
+	status := a.status
+	a.mu.RUnlock()
+	if profileFound {
+		if floor := fanTestFloor(profile, status); percent < floor {
+			writeJSON(w, http.StatusConflict, map[string]any{
+				"error":           fmt.Sprintf("Testwert %d%% unterschreitet die aktuelle Sicherheitsuntergrenze von %d%%", percent, floor),
+				"minimum_percent": floor,
+			})
+			return
+		}
+	}
+
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
 	if err := a.i2c.SetPercent(ctx, percent); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
+	a.testCooldownUntil = time.Now().Add(fanTestCooldown)
 
 	// The test wrote a value the control loop does not know about, so the
 	// cached fan speed has to be invalidated or the loop would not restore it.
@@ -255,7 +336,7 @@ func (a *App) handleFanTest(w http.ResponseWriter, r *http.Request) {
 	a.invalidateFanStateLocked()
 	a.mu.Unlock()
 
-	_ = a.store.AppendEvent(store.Event{
+	a.appendEvent(store.Event{
 		Time:    time.Now(),
 		Type:    "fan-test",
 		Message: fmt.Sprintf("Test: %d%%", percent),
@@ -264,18 +345,30 @@ func (a *App) handleFanTest(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"tested_percent": percent})
 }
 
-func (a *App) setOverride(value Override) {
+// setOverride persists before touching in-memory state: if persistence
+// fails, the running override must stay exactly what it was, not silently
+// diverge from what a restart would restore from disk.
+func (a *App) setOverride(value Override) error {
+	a.configMu.Lock()
+	defer a.configMu.Unlock()
+
+	var err error
+	if value.Mode == "" {
+		err = a.store.Remove(overrideFile)
+	} else {
+		err = a.store.SaveJSON(overrideFile, value)
+	}
+	a.setStorageOK(err == nil)
+	if err != nil {
+		return err
+	}
+
 	a.mu.Lock()
 	a.override = value
 	a.invalidateFanStateLocked()
 	a.mu.Unlock()
-
-	if value.Mode == "" {
-		_ = a.store.Remove(overrideFile)
-	} else {
-		_ = a.store.SaveJSON(overrideFile, value)
-	}
 	a.trigger()
+	return nil
 }
 
 func (a *App) loadOverride() Override {

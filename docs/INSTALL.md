@@ -5,7 +5,7 @@
 3. Repository auf GitHub ablegen.
 4. In Portainer einen Git-Stack anlegen oder aktualisieren.
 5. Variablen aus `.env.example` als Stack-Umgebungsvariablen setzen,
-   mindestens `API_TOKEN`.
+   mindestens `ADMIN_PASSWORD` (schützt das gesamte Dashboard per Login).
 6. **Re-pull image** deaktivieren, der Build läuft lokal.
 7. Stack deployen und `http://<unraid-ip>:8086/` öffnen.
 

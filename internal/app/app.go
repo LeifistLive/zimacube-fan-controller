@@ -18,6 +18,11 @@ import (
 const (
 	configFile   = "config.json"
 	overrideFile = "override.json"
+
+	// writeFailureRetryInterval overrides ReapplyInterval right after a
+	// failed I2C write, so a transient fault is retried quickly instead of
+	// waiting out the full (multi-minute) reapply interval.
+	writeFailureRetryInterval = 10 * time.Second
 )
 
 type Config struct {
@@ -28,8 +33,10 @@ type Config struct {
 	CheckInterval       time.Duration
 	HistoryInterval     time.Duration
 	DetectInterval      time.Duration
+	ReapplyInterval     time.Duration
 	ListenAddress       string
-	APIToken            string
+	AdminUser           string
+	AdminPassword       string
 	VarINI              string
 	DisksINI            string
 	DataDir             string
@@ -60,8 +67,14 @@ func (c Config) sanitized() Config {
 	if c.DetectInterval < c.CheckInterval {
 		c.DetectInterval = 5 * time.Minute
 	}
+	if c.ReapplyInterval < c.CheckInterval {
+		c.ReapplyInterval = 5 * time.Minute
+	}
 	if c.ListenAddress == "" {
 		c.ListenAddress = ":8080"
+	}
+	if c.AdminUser == "" {
+		c.AdminUser = "admin"
 	}
 	if c.VarINI == "" {
 		c.VarINI = "/var/local/emhttp/var.ini"
@@ -94,9 +107,28 @@ type loopState struct {
 	operation  string
 	historyAt  time.Time
 	detectAt   time.Time
+	reapplyAt  time.Time
 	writeOK    bool
 	online     bool
 	tempOK     bool
+}
+
+// rateGate is a minimal "at most once per interval" gate, used to rate-limit
+// write endpoints per category. It intentionally does not queue or burst:
+// a rejected call must be retried later by the caller.
+type rateGate struct {
+	mu   sync.Mutex
+	next time.Time
+}
+
+func (g *rateGate) Allow(now time.Time, interval time.Duration) bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if now.Before(g.next) {
+		return false
+	}
+	g.next = now.Add(interval)
+	return true
 }
 
 type App struct {
@@ -105,6 +137,30 @@ type App struct {
 	store     *store.Store
 	started   time.Time
 	commandCh chan struct{}
+
+	// configMu serializes the validate -> persist -> update-memory -> trigger
+	// flow for profile changes, config updates and overrides, so concurrent
+	// HTTP requests cannot interleave their persistence steps.
+	configMu sync.Mutex
+
+	// writeLimiters rate-limits write endpoints per category ("override",
+	// "profile", "config", "test") instead of globally, so an action on one
+	// endpoint never blocks an unrelated one.
+	writeLimiters map[string]*rateGate
+
+	// testMu ensures only one fan test runs at a time; testCooldownUntil adds
+	// a short cooldown afterwards, since a test is physically more disruptive
+	// than other writes.
+	testMu            sync.Mutex
+	testCooldownUntil time.Time
+
+	// storageMu/storageOK track whether the most recent persistence attempt
+	// (config, override, history, events) succeeded, surfaced via /api/health.
+	storageMu sync.RWMutex
+	storageOK bool
+
+	// auth guards the whole dashboard (session cookies), see auth.go.
+	auth *auth
 
 	mu         sync.RWMutex
 	status     Status
@@ -133,7 +189,15 @@ func New(cfg Config) (*App, error) {
 		commandCh: make(chan struct{}, 1),
 		runtime:   defaultRuntimeConfig(),
 		state:     loopState{online: true, tempOK: true},
+		storageOK: true,
+		writeLimiters: map[string]*rateGate{
+			"override": {},
+			"profile":  {},
+			"config":   {},
+			"test":     {},
+		},
 	}
+	app.auth = newAuth(cfg.AdminUser, cfg.AdminPassword)
 
 	loaded, err := loadRuntimeConfig(st)
 	switch {
@@ -152,9 +216,6 @@ func New(cfg Config) (*App, error) {
 
 	app.override = app.loadOverride()
 
-	if cfg.APIToken == "" {
-		log.Printf("[WARN] API_TOKEN ist leer, Schreibzugriffe sind ohne Authentifizierung möglich")
-	}
 	if profile, ok := app.runtime.Profiles[app.runtime.ActiveProfile]; ok && profile.ArrayBoostPercent < 50 {
 		log.Printf("[WARN] Sicherheitsdrehzahl von Profil %q ist nur %d%%, bei Sensorausfall bleibt es leise",
 			app.runtime.ActiveProfile, profile.ArrayBoostPercent)
@@ -182,6 +243,7 @@ func defaultRuntimeConfig() RuntimeConfig {
 		return curve
 	}
 	return RuntimeConfig{
+		ConfigVersion: currentConfigVersion,
 		ActiveProfile: "balanced",
 		Profiles: map[string]Profile{
 			"silent": {
@@ -216,11 +278,20 @@ func defaultRuntimeConfig() RuntimeConfig {
 // curves. Both the config file and the REST API go through here, so Speed and
 // ThresholdForSpeed can rely on sorted, monotonic curves.
 func normalizeRuntimeConfig(in RuntimeConfig) (RuntimeConfig, error) {
+	// ConfigVersion 0 means the field was absent, i.e. a config.json written
+	// before this field existed; treat it as version 1 so existing
+	// installations keep working without a manual migration step.
+	if in.ConfigVersion > currentConfigVersion {
+		return RuntimeConfig{}, fmt.Errorf("config_version %d wird von dieser Version nicht unterstützt (höchstens %d)",
+			in.ConfigVersion, currentConfigVersion)
+	}
+
 	if len(in.Profiles) == 0 {
 		return RuntimeConfig{}, errors.New("mindestens ein Profil erforderlich")
 	}
 
 	out := RuntimeConfig{
+		ConfigVersion: currentConfigVersion,
 		ActiveProfile: strings.TrimSpace(in.ActiveProfile),
 		Profiles:      make(map[string]Profile, len(in.Profiles)),
 	}
@@ -330,12 +401,49 @@ func (a *App) ApplySafeState(percent int) {
 		log.Printf("[WARN] Abschaltdrehzahl %d%% konnte nicht gesetzt werden: %v", percent, err)
 		return
 	}
-	log.Printf("[INFO] Abschaltdrehzahl %d%% gesetzt", percent)
-	_ = a.store.AppendEvent(store.Event{
+	// Deliberately worded so this line is easy to grep for after the
+	// container has already stopped, to confirm the safe speed was really
+	// written before Docker terminated the process.
+	log.Printf("[OK] Safe-Shutdown-Drehzahl %d%% geschrieben, bevor der Dienst beendet wird", percent)
+	a.appendEvent(store.Event{
 		Time:    time.Now(),
 		Type:    "shutdown",
 		Message: fmt.Sprintf("Abschaltdrehzahl %d%% gesetzt", percent),
 	})
+}
+
+// setStorageOK records whether the most recent persistence attempt (config,
+// override, history or events) succeeded. Surfaced via /api/health so
+// monitoring can distinguish "controller unreachable" from "disk full".
+func (a *App) setStorageOK(ok bool) {
+	a.storageMu.Lock()
+	a.storageOK = ok
+	a.storageMu.Unlock()
+}
+
+func (a *App) storageHealthy() bool {
+	a.storageMu.RLock()
+	defer a.storageMu.RUnlock()
+	return a.storageOK
+}
+
+// appendEvent and appendHistory wrap the store's persistence calls so a
+// failure is logged and reflected in storageOK instead of being silently
+// discarded. The control loop must keep running either way.
+func (a *App) appendEvent(event store.Event) {
+	err := a.store.AppendEvent(event)
+	a.setStorageOK(err == nil)
+	if err != nil {
+		log.Printf("[WARN] Ereignis konnte nicht gespeichert werden: %v", err)
+	}
+}
+
+func (a *App) appendHistory(point store.HistoryPoint) {
+	err := a.store.AppendHistory(point)
+	a.setStorageOK(err == nil)
+	if err != nil {
+		log.Printf("[WARN] Verlaufspunkt konnte nicht gespeichert werden: %v", err)
+	}
 }
 
 // decide is pure so that the control logic is unit testable.
@@ -411,6 +519,56 @@ func failsafePercent(profile Profile) int {
 	return percent
 }
 
+// fanTestFloor mirrors decide()'s safety minimums: a manual fan test must
+// never write a value lower than what the emergency, failsafe or array-boost
+// logic would currently require, or it would briefly undercut the very
+// protections those mechanisms exist for.
+func fanTestFloor(profile Profile, status Status) int {
+	floor := controller.MinPercent
+	if !status.TemperatureValid {
+		if v := failsafePercent(profile); v > floor {
+			floor = v
+		}
+	}
+	if arrayActive(status.ArrayOperation) && profile.ArrayBoostPercent > floor {
+		floor = profile.ArrayBoostPercent
+	}
+	if status.TemperatureValid && status.MaximumDiskTemperature >= profile.EmergencyTemperature &&
+		profile.EmergencyPercent > floor {
+		floor = profile.EmergencyPercent
+	}
+	return floor
+}
+
+// shouldWriteFan decides whether the control loop must write to the
+// controller this cycle: the target changed, the controller was just
+// rediscovered after being offline (a reset may have forgotten the PWM), or
+// the reapply interval elapsed. That interval shrinks to
+// writeFailureRetryInterval right after a failed write, so a transient I2C
+// fault is retried within seconds instead of waiting out the full,
+// multi-minute reapply cadence.
+func shouldWriteFan(valueChanged bool, sinceLastApply, reapplyInterval time.Duration, previousWriteOK, rediscovered bool) bool {
+	if valueChanged || rediscovered {
+		return true
+	}
+	interval := reapplyInterval
+	if !previousWriteOK {
+		interval = writeFailureRetryInterval
+	}
+	return sinceLastApply >= interval
+}
+
+// diskInfos converts the unraid package's internal disk records into the
+// API-facing shape. unraid.ReadDiskTemperatures has already filtered out
+// cache/flash devices, so every entry here is an HDD.
+func diskInfos(disks []unraid.Disk) []DiskInfo {
+	out := make([]DiskInfo, 0, len(disks))
+	for _, disk := range disks {
+		out = append(out, DiskInfo{Name: disk.Name, Temperature: disk.Temperature, Valid: disk.Valid})
+	}
+	return out
+}
+
 func arrayActive(operation string) bool {
 	switch operation {
 	case "", unraid.OperationNone, unraid.OperationUnknown:
@@ -440,11 +598,12 @@ func (a *App) evaluate(ctx context.Context) {
 	generation := a.generation
 	previousTempOK := a.state.tempOK
 	previousOnline := a.state.online
+	previousWriteOK := a.state.writeOK
 	a.mu.RUnlock()
 
 	if tempErr != nil && previousTempOK {
 		log.Printf("[ERROR] HDD-Temperatur nicht lesbar (%v), Sicherheitsdrehzahl aktiv", tempErr)
-		_ = a.store.AppendEvent(store.Event{
+		a.appendEvent(store.Event{
 			Time:    now,
 			Type:    "sensor",
 			Message: "HDD-Temperatur nicht lesbar: " + tempErr.Error(),
@@ -483,21 +642,35 @@ func (a *App) evaluate(ctx context.Context) {
 		}
 	}
 
+	// A reapply/retry write repeats the same value the loop already believes
+	// is active, so it must not be logged as a fan-change event (that would
+	// flood events.jsonl every ReapplyInterval) and must not affect
+	// mode/hysteresis decisions, only the wire write itself.
+	valueChanged := result.Percent != lastFan
+	rediscovered := online && !previousOnline
+	attemptWrite := shouldWriteFan(valueChanged, now.Sub(a.state.reapplyAt), a.cfg.ReapplyInterval, previousWriteOK, rediscovered)
+
 	writeOK := online
 	var writeErr error
 	switch {
 	case !online:
 		writeErr = statusErr
-	case result.Percent != lastFan:
-		log.Printf("[INFO] Setze Lüfter auf %d%%, %s", result.Percent, result.Reason)
+	case attemptWrite:
+		if valueChanged {
+			log.Printf("[INFO] Setze Lüfter auf %d%%, %s", result.Percent, result.Reason)
+		} else {
+			log.Printf("[INFO] Erneutes Schreiben von %d%% (Reapply)", result.Percent)
+		}
 		writeErr = a.i2c.SetPercent(ctx, result.Percent)
 		writeOK = writeErr == nil
 		if writeOK {
-			_ = a.store.AppendEvent(store.Event{
-				Time:    time.Now(),
-				Type:    "fan-change",
-				Message: fmt.Sprintf("%d%%, %s", result.Percent, result.Reason),
-			})
+			if valueChanged {
+				a.appendEvent(store.Event{
+					Time:    time.Now(),
+					Type:    "fan-change",
+					Message: fmt.Sprintf("%d%%, %s", result.Percent, result.Reason),
+				})
+			}
 		} else {
 			log.Printf("[ERROR] Lüftergeschwindigkeit konnte nicht gesetzt werden: %v", writeErr)
 		}
@@ -509,6 +682,9 @@ func (a *App) evaluate(ctx context.Context) {
 	if writeOK && a.generation == generation {
 		a.state.fanPercent = result.Percent
 	}
+	if attemptWrite && writeOK && a.generation == generation {
+		a.state.reapplyAt = now
+	}
 	a.state.writeOK = writeOK
 	a.state.tempOK = reading.Valid
 	a.state.online = online
@@ -519,6 +695,10 @@ func (a *App) evaluate(ctx context.Context) {
 		I2CBus:                 a.cfg.I2CBus,
 		I2CAddress:             a.cfg.I2CAddress,
 		FanPercent:             result.Percent,
+		TargetPercent:          result.Percent,
+		LastAppliedPercent:     a.state.fanPercent,
+		FeedbackAvailable:      false,
+		Disks:                  diskInfos(temperatures.Disks),
 		MaximumDiskTemperature: reading.Temperature,
 		TemperatureValid:       reading.Valid,
 		DisksReporting:         reading.Reporting,
@@ -549,7 +729,7 @@ func (a *App) evaluate(ctx context.Context) {
 		}
 	}
 	if shouldHistory {
-		_ = a.store.AppendHistory(store.HistoryPoint{
+		a.appendHistory(store.HistoryPoint{
 			Time:        now,
 			Temperature: reading.Temperature,
 			FanPercent:  result.Percent,
@@ -558,7 +738,7 @@ func (a *App) evaluate(ctx context.Context) {
 		})
 	}
 	if modeChanged {
-		_ = a.store.AppendEvent(store.Event{
+		a.appendEvent(store.Event{
 			Time:    now,
 			Type:    "mode",
 			Message: fmt.Sprintf("Modus=%s, Array=%s", result.Mode, operation),

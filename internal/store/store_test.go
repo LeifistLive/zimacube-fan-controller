@@ -1,6 +1,8 @@
 package store
 
 import (
+	"os"
+	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
@@ -33,6 +35,50 @@ func TestSaveAndLoadJSON(t *testing.T) {
 	}
 	if err := st.Remove("config.json"); err != nil {
 		t.Fatalf("zweites Remove darf keinen Fehler liefern: %v", err)
+	}
+}
+
+func TestLoadJSONRejectsUnknownFields(t *testing.T) {
+	dir := t.TempDir()
+	st := New(dir, 0)
+	if err := st.Ensure(); err != nil {
+		t.Fatalf("Ensure: %v", err)
+	}
+
+	type payload struct {
+		Name string `json:"name"`
+	}
+
+	raw := []byte(`{"name":"test","unbekannt":true}`)
+	if err := os.WriteFile(filepath.Join(dir, "config.json"), raw, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	var loaded payload
+	if err := st.LoadJSON("config.json", &loaded); err == nil {
+		t.Fatal("unbekanntes Feld muss abgelehnt werden")
+	}
+}
+
+func TestLoadJSONRejectsTrailingData(t *testing.T) {
+	dir := t.TempDir()
+	st := New(dir, 0)
+	if err := st.Ensure(); err != nil {
+		t.Fatalf("Ensure: %v", err)
+	}
+
+	type payload struct {
+		Name string `json:"name"`
+	}
+
+	raw := []byte(`{"name":"test"}{"name":"zweites-objekt"}`)
+	if err := os.WriteFile(filepath.Join(dir, "config.json"), raw, 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	var loaded payload
+	if err := st.LoadJSON("config.json", &loaded); err == nil {
+		t.Fatal("Daten nach dem ersten JSON-Objekt müssen abgelehnt werden")
 	}
 }
 

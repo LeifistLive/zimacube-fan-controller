@@ -43,13 +43,69 @@ temp="41"
 }
 
 func TestReadDiskTemperaturesAllSpunDown(t *testing.T) {
-	path := write(t, "disks.ini", "temp=\"*\"\ntemp=\"*\"\n")
+	path := write(t, "disks.ini", `["disk1"]
+temp="*"
+["disk2"]
+temp="*"
+`)
 
 	result, err := ReadDiskTemperatures(path)
 	if err != nil {
 		t.Fatalf("Standby ist kein Fehler: %v", err)
 	}
 	if result.Maximum != 0 || result.Parsed != 0 || result.Reporting != 2 {
+		t.Fatalf("unerwartetes Ergebnis: %+v", result)
+	}
+	if len(result.Disks) != 2 || result.Disks[0].Valid || result.Disks[1].Valid {
+		t.Fatalf("Standby-Laufwerke sollten in Disks stehen, aber ungueltig sein: %+v", result.Disks)
+	}
+}
+
+// Regression: eine Cache-/NVMe-SSD in disks.ini wurde bisher als HDD
+// mitgezaehlt und konnte damit die Zieltemperatur der Luefterkurve verfaelschen.
+func TestReadDiskTemperaturesExcludesCache(t *testing.T) {
+	path := write(t, "disks.ini", `["disk1"]
+name="disk1"
+type="DATA"
+temp="35"
+["cache"]
+name="cache"
+type="CACHE"
+temp="55"
+["flash"]
+name="flash"
+type="FLASH"
+temp="30"
+`)
+
+	result, err := ReadDiskTemperatures(path)
+	if err != nil {
+		t.Fatalf("unerwarteter Fehler: %v", err)
+	}
+	if result.Maximum != 35 {
+		t.Fatalf("Maximum = %d, erwartet 35 (Cache-SSD mit 55 Grad muss ausgeschlossen sein)", result.Maximum)
+	}
+	if result.Reporting != 1 || result.Parsed != 1 {
+		t.Fatalf("Reporting/Parsed = %d/%d, erwartet 1/1", result.Reporting, result.Parsed)
+	}
+	if len(result.Disks) != 1 || result.Disks[0].Name != "disk1" {
+		t.Fatalf("Disks sollte nur disk1 enthalten: %+v", result.Disks)
+	}
+}
+
+// Fehlt das type=-Feld ganz (aeltere Unraid-Versionen), muss das Laufwerk wie
+// bisher mitgezaehlt werden, statt durch den neuen Filter zu verschwinden.
+func TestReadDiskTemperaturesCountsDisksWithoutTypeField(t *testing.T) {
+	path := write(t, "disks.ini", `["disk1"]
+name="disk1"
+temp="35"
+`)
+
+	result, err := ReadDiskTemperatures(path)
+	if err != nil {
+		t.Fatalf("unerwarteter Fehler: %v", err)
+	}
+	if result.Reporting != 1 || result.Maximum != 35 {
 		t.Fatalf("unerwartetes Ergebnis: %+v", result)
 	}
 }

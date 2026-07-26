@@ -154,6 +154,59 @@ func TestLoadRuntimeConfigRejectsBrokenFile(t *testing.T) {
 	}
 }
 
+// Regression: config.json geschrieben vor Einführung von config_version darf
+// nach einem Update weiterhin geladen werden, ohne dass ein Nutzer manuell
+// eingreifen muss.
+func TestNormalizeMigratesMissingConfigVersion(t *testing.T) {
+	input := RuntimeConfig{
+		// ConfigVersion absichtlich nicht gesetzt (Zero-Value, wie eine
+		// config.json von vor dieser Änderung).
+		ActiveProfile: "p",
+		Profiles: map[string]Profile{
+			"p": {
+				Curve:                mustCurve(t, "0:60,48:100"),
+				ArrayBoostPercent:    100,
+				EmergencyTemperature: 52,
+				EmergencyPercent:     100,
+			},
+		},
+	}
+	normalized, err := normalizeRuntimeConfig(input)
+	if err != nil {
+		t.Fatalf("unerwarteter Fehler: %v", err)
+	}
+	if normalized.ConfigVersion != currentConfigVersion {
+		t.Fatalf("ConfigVersion = %d, erwarte %d", normalized.ConfigVersion, currentConfigVersion)
+	}
+}
+
+func TestNormalizeRejectsFutureConfigVersion(t *testing.T) {
+	input := RuntimeConfig{
+		ConfigVersion: currentConfigVersion + 1,
+		ActiveProfile: "p",
+		Profiles: map[string]Profile{
+			"p": {
+				Curve:                mustCurve(t, "0:60,48:100"),
+				ArrayBoostPercent:    100,
+				EmergencyTemperature: 52,
+				EmergencyPercent:     100,
+			},
+		},
+	}
+	if _, err := normalizeRuntimeConfig(input); err == nil {
+		t.Fatal("eine neuere config_version als unterstützt muss abgelehnt werden")
+	}
+}
+
+func mustCurve(t *testing.T, raw string) controller.Curve {
+	t.Helper()
+	curve, err := controller.ParseCurve(raw)
+	if err != nil {
+		t.Fatalf("Kurve: %v", err)
+	}
+	return curve
+}
+
 func TestSanitizedClampsConfig(t *testing.T) {
 	cfg := Config{
 		I2CBus:              -1,
@@ -182,7 +235,7 @@ func TestSanitizedClampsConfig(t *testing.T) {
 	if cfg.SafeShutdownPercent != controller.MaxPercent {
 		t.Errorf("SafeShutdownPercent = %d", cfg.SafeShutdownPercent)
 	}
-	if cfg.DataDir == "" || cfg.ListenAddress == "" || cfg.DetectInterval <= 0 {
+	if cfg.DataDir == "" || cfg.ListenAddress == "" || cfg.DetectInterval <= 0 || cfg.ReapplyInterval <= 0 {
 		t.Errorf("Standardwerte fehlen: %+v", cfg)
 	}
 }
