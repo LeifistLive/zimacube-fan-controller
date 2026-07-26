@@ -544,6 +544,12 @@ font-size:.72rem;font-weight:650;margin-left:8px;
 .controls-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px}
 .controls-row:first-child{margin-top:0}
 .controls-row.mt{margin-top:14px}
+/* Without this, the [hidden] attribute has no visual effect here: an author
+   rule (this class sets display:flex) always wins over the browser's
+   default [hidden]{display:none} UA rule at equal specificity, regardless
+   of the hidden attribute being present. manualRow/testRow only actually
+   toggled their DOM property, never their rendered visibility. */
+.controls-row[hidden]{display:none}
 
 .resource-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:16px}
 @media (max-width:1000px){.resource-grid{grid-template-columns:1fr}}

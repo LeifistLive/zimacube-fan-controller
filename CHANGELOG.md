@@ -1,5 +1,19 @@
 # Changelog
 
+## 4.1.2
+
+### Behoben
+
+- Die eigentliche Ursache dafür, dass Prozent-Eingabe und Testknöpfe bei
+  Automatik/Notfall sichtbar blieben: `.controls-row` setzt `display:flex`
+  als Autor-Regel, die das `hidden`-Attribut (nur Browser-Standardregel mit
+  gleicher Spezifität) immer überstimmt – unabhängig vom Attribut selbst.
+  Das JS setzte `hidden` also korrekt, es hatte nur nie eine sichtbare
+  Wirkung. `.controls-row[hidden]{display:none}` erzwingt das jetzt explizit
+  (dasselbe Muster wie zuvor schon bei `.chart-tooltip` und `.login-error`).
+  Der vorherige 4.1.1-Fix (Button/Zeilen aus demselben Zustand ableiten)
+  bleibt zusätzlich bestehen.
+
 ## 4.1.1
 
 ### Behoben
