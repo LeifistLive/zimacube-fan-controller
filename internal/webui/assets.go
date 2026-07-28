@@ -329,7 +329,6 @@ document.getElementById("loginForm").addEventListener("submit", async function (
 const StyleCSS = `:root{
 color-scheme:dark;
 --bg:#0a0a10;
---sidebar-bg:#0c0c13;
 --card:#121218;
 --card-2:#17171f;
 --border:#1e1e27;
@@ -350,7 +349,6 @@ color-scheme:dark;
 :root[data-theme="light"]{
 color-scheme:light;
 --bg:#f4f4f8;
---sidebar-bg:#ffffff;
 --card:#ffffff;
 --card-2:#f0f0f5;
 --border:#e3e3ec;
@@ -377,9 +375,15 @@ svg{display:block}
 
 .shell{display:flex;align-items:flex-start;min-height:100vh}
 
+/* The rail floats as its own bordered, rounded card (margin on all sides,
+   var(--card) background) instead of a flush full-height panel butted
+   against the content - the same card language .panel/.hero-card already
+   use elsewhere, just applied to navigation. */
 .sidebar{
-width:250px;flex:0 0 250px;background:var(--sidebar-bg);border-right:1px solid var(--border);
-display:flex;flex-direction:column;padding:22px 16px;position:sticky;top:0;height:100vh;overflow-y:auto;
+width:234px;flex:0 0 234px;background:var(--card);border:1px solid var(--border);
+border-radius:var(--radius-card);
+display:flex;flex-direction:column;padding:20px 14px;position:sticky;top:16px;
+height:calc(100vh - 32px);margin:16px 0 16px 16px;overflow-y:auto;
 }
 .brand{display:flex;align-items:center;gap:12px;padding:4px 8px 24px}
 .brand-icon-box{
@@ -396,16 +400,15 @@ display:flex;align-items:center;justify-content:center;color:#fff;
 .side-link{
 display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:9px;
 color:var(--text-muted);text-decoration:none;font-size:.86rem;font-weight:550;
-border-left:2px solid transparent;
 }
 .side-link svg{width:16px;height:16px;flex:0 0 auto}
 .side-link:hover{background:var(--card-2);color:var(--text)}
-/* Deliberately squarer than the hover state: a thicker left rail and tight
-   corners read as an active tab, not another rounded pill. */
-.side-link.active{
-background:var(--purple-soft);color:var(--text);border-left:3px solid var(--purple);
-border-radius:4px;font-weight:650;
-}
+/* Applies at every breakpoint: the active row fills with the same soft
+   purple tint used elsewhere for active state, and the icon alone (not the
+   label) picks up the full accent color - a two-tone cue rather than a
+   border rail. */
+.side-link.active{background:var(--purple-soft);color:var(--text);font-weight:650}
+.side-link.active svg{color:var(--purple)}
 
 .sidebar-footer{margin-top:auto;display:flex;align-items:center;gap:10px;padding:14px 10px 4px;border-top:1px solid var(--border)}
 .sidebar-footer-title{font-size:.8rem;font-weight:650}
@@ -603,47 +606,44 @@ padding:32px 28px;text-align:center;
 .login-error{color:#fca5a5;font-size:.82rem;margin-top:12px}
 .login-error[hidden]{display:none}
 
-/* Below 900px the sidebar becomes a fixed bottom tab bar instead of a
+/* Below 900px the sidebar becomes a floating bottom capsule instead of a
    horizontally scrolling row: five items plus the full-width brand no
    longer fit on a phone screen, and a couple of tabs (Events,
    Configuration) ended up scrolled out of view with no hint that they were
-   still reachable. A bottom bar with justify-content:space-around always
-   shows all five tabs at once, no scrolling needed, and matches the
-   navigation pattern phone users already expect from native apps. */
+   still reachable. Inset left/right/bottom instead of edge-to-edge, it
+   mirrors the same floating-card treatment the desktop rail now uses, just
+   reflowed into a row with justify-content:space-around so all five tabs
+   show at once without scrolling. */
 @media (max-width:900px){
 .shell{flex-direction:column}
 .sidebar{
-width:100%;flex:0 0 auto;height:auto;position:fixed;top:auto;bottom:0;left:0;right:0;
+width:auto;flex:0 0 auto;height:auto;position:fixed;top:auto;margin:0;
+left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));
 flex-direction:row;align-items:stretch;gap:0;
-padding:6px 4px calc(6px + env(safe-area-inset-bottom));
-border-right:none;border-top:1px solid var(--border);
-box-shadow:0 -2px 16px rgba(0,0,0,.16);
+padding:6px;border-radius:20px;
 z-index:20;
 }
 .brand{display:none}
-.side-nav{flex-direction:row;margin-top:0;flex:1;justify-content:space-around;gap:0}
+.side-nav{flex-direction:row;margin-top:0;flex:1;justify-content:space-around;gap:2px}
 .side-nav-label{display:none}
 .side-link{
 flex:1;flex-direction:column;justify-content:center;gap:3px;
-padding:6px 2px;border-left:none;border-radius:8px;
-font-size:.66rem;text-align:center;white-space:nowrap;
+padding:6px 2px;border-radius:14px;
+font-size:.62rem;text-align:center;white-space:nowrap;
 }
-.side-link svg{width:20px;height:20px;margin:0 auto}
-/* A bottom border reads as the active-tab indicator here, mirroring the
-   left border used in the vertical desktop sidebar. */
-.side-link.active{border-left:none;border-radius:8px;box-shadow:inset 0 -3px 0 var(--purple)}
+.side-link svg{width:19px;height:19px;margin:0 auto}
 /* Purely informational (the same online/offline state is already visible
    on the Status page), so hiding it to save space is fine here - unlike
    logout, which now lives in the page header instead and stays reachable
    on every screen size regardless. */
 .sidebar-footer{display:none}
-.content{padding:18px 16px calc(78px + env(safe-area-inset-bottom))}
+.content{padding:18px 16px calc(88px + env(safe-area-inset-bottom))}
 }
 
 @media (max-width:480px){
 .mode-btn{padding:9px 6px;font-size:.78rem}
 .filter-input{width:100%}
-.side-link{font-size:.62rem}
+.side-link{font-size:.6rem}
 }`
 
 const ScriptJS = `"use strict";

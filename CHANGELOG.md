@@ -1,5 +1,17 @@
 # Changelog
 
+## 4.6.0
+
+### Changed
+
+- Navigation redesigned as a floating rail/capsule instead of a flush panel:
+  the desktop sidebar is now a bordered, rounded card with margin on every
+  side (the same card language `.panel`/`.hero-card` already use), and the
+  mobile bar from 4.5.1 becomes an inset floating capsule rather than
+  edge-to-edge. The active tab is now a soft purple fill on the row plus a
+  purple icon, replacing the previous left-border/underline indicators, so
+  both breakpoints share one active-state treatment instead of two.
+
 ## 4.5.1
 
 ### Fixed
