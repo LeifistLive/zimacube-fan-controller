@@ -197,7 +197,10 @@ Refresh
 </div></div>
 <div class="chart-wrap">
 <canvas id="chartTemp" height="220"></canvas>
-<div class="chart-tooltip" id="chartTempTooltip" hidden></div>
+<div class="chart-tooltip" id="chartTempTooltip" hidden>
+<div class="chart-tooltip-time"></div>
+<div class="chart-tooltip-value"></div>
+</div>
 </div>
 </div>
 <div class="panel">
@@ -207,7 +210,10 @@ Refresh
 </div></div>
 <div class="chart-wrap">
 <canvas id="chartFan" height="220"></canvas>
-<div class="chart-tooltip" id="chartFanTooltip" hidden></div>
+<div class="chart-tooltip" id="chartFanTooltip" hidden>
+<div class="chart-tooltip-time"></div>
+<div class="chart-tooltip-value"></div>
+</div>
 </div>
 </div>
 </div>
@@ -586,10 +592,17 @@ canvas{width:100%;display:block}
 .chart-tooltip{
 position:absolute;pointer-events:none;z-index:2;
 background:var(--card-2);border:1px solid var(--border-soft);border-radius:8px;
-padding:6px 10px;font-size:.76rem;color:var(--text);white-space:nowrap;
-transform:translate(-50%,-115%);box-shadow:0 4px 14px rgba(0,0,0,.25);
+padding:7px 11px;white-space:nowrap;
+transform:translate(-50%,-135%);box-shadow:0 4px 14px rgba(0,0,0,.25);
 }
 .chart-tooltip[hidden]{display:none}
+.chart-tooltip::after{
+content:"";position:absolute;left:50%;bottom:-5px;transform:translateX(-50%);
+width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;
+border-top:5px solid var(--card-2);
+}
+.chart-tooltip-time{font-size:.68rem;color:var(--text-muted);margin-bottom:2px}
+.chart-tooltip-value{font-size:.92rem;font-weight:700;color:var(--text)}
 
 .table-wrap{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:.85rem}
@@ -1178,17 +1191,55 @@ function drawArea(canvas, points, valueKey, color, minFloor, maxFloor, suffix) {
   // point by x position and show its exact value, without redrawing. py is
   // kept alongside px so the tooltip can require the cursor to actually be
   // near the line, not just anywhere in the gradient-filled area below it.
+  // base is a snapshot of the plain chart pixels, taken once here instead of
+  // redrawing the whole grid/fill/line on every mousemove: showChartTooltip
+  // repaints this snapshot first, then draws only the small hover marker on
+  // top of it.
   canvas._tooltip = {
-    points: points, valueKey: valueKey, suffix: suffix,
+    points: points, valueKey: valueKey, suffix: suffix, color: color,
+    plotTop: padTop, plotBottom: padTop + plotH,
     px: points.map(function (_, index) { return px(index); }),
     py: points.map(function (point) { return py(point[valueKey]); })
   };
+  canvas._base = ctx.getImageData(0, 0, canvas.width, canvas.height);
 }
 
 // hoverTolerancePx bounds how far (in CSS pixels) the cursor may be from the
 // line itself, vertically, before the tooltip hides. Without it the tooltip
 // showed anywhere under the line, including deep in the gradient fill.
 var hoverTolerancePx = 14;
+
+// drawHoverMarker draws a dashed vertical guide from the hovered point up to
+// the plot's top edge, plus a filled dot on the line itself in the series'
+// own color - a fixed, precise anchor for the eye, instead of a tooltip that
+// only ever followed the raw (and slightly imprecise) cursor position.
+function drawHoverMarker(ctx, data, index) {
+  var x = data.px[index];
+  var y = data.py[index];
+
+  ctx.save();
+  ctx.strokeStyle = "rgba(255,255,255,.18)";
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(x, data.plotTop);
+  ctx.lineTo(x, data.plotBottom);
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.save();
+  ctx.shadowColor = data.color;
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.arc(x, y, 4.5, 0, Math.PI * 2);
+  ctx.fillStyle = data.color;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "rgba(255,255,255,.9)";
+  ctx.stroke();
+  ctx.restore();
+}
 
 function showChartTooltip(canvas, tooltip, clientX, clientY) {
   var data = canvas._tooltip;
@@ -1204,16 +1255,24 @@ function showChartTooltip(canvas, tooltip, clientX, clientY) {
     if (dist < nearestDist) { nearestDist = dist; nearest = index; }
   });
 
+  var ctx = canvas.getContext("2d");
+  if (canvas._base) { ctx.putImageData(canvas._base, 0, 0); }
+
   if (Math.abs(y - data.py[nearest]) > hoverTolerancePx) {
     tooltip.hidden = true;
     return;
   }
 
+  drawHoverMarker(ctx, data, nearest);
+
   var point = data.points[nearest];
   var value = point[data.valueKey];
-  tooltip.textContent = new Date(point.time).toLocaleString() + " – " + value + data.suffix;
-  tooltip.style.left = x + "px";
-  tooltip.style.top = y + "px";
+  tooltip.querySelector(".chart-tooltip-time").textContent = new Date(point.time).toLocaleString();
+  var valueEl = tooltip.querySelector(".chart-tooltip-value");
+  valueEl.textContent = value + data.suffix;
+  valueEl.style.color = data.color;
+  tooltip.style.left = data.px[nearest] + "px";
+  tooltip.style.top = data.py[nearest] + "px";
   tooltip.hidden = false;
 }
 
@@ -1273,7 +1332,10 @@ function wireChartTooltip(canvasId, tooltipId) {
   canvas.addEventListener("mousemove", function (event) {
     showChartTooltip(canvas, tooltip, event.clientX, event.clientY);
   });
-  canvas.addEventListener("mouseleave", function () { tooltip.hidden = true; });
+  canvas.addEventListener("mouseleave", function () {
+    tooltip.hidden = true;
+    if (canvas._base) { canvas.getContext("2d").putImageData(canvas._base, 0, 0); }
+  });
 }
 
 function wire() {

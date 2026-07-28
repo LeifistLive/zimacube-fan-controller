@@ -1,5 +1,32 @@
 # Changelog
 
+## 4.11.0
+
+### Changed
+
+- Polished the history chart hover: a colored dot with a soft glow now marks
+  the exact point on the line, plus a dashed vertical guide from the plot's
+  top edge down to it - a fixed anchor for the eye instead of a tooltip that
+  only ever followed the raw cursor position. The tooltip itself now shows
+  the timestamp and value on separate lines (muted time, bold value in the
+  series' own color) with a small pointer connecting it to the dot, instead
+  of one plain line of text.
+
+## 4.10.1
+
+### Fixed
+
+- The GHCR publish workflow baked `vlatest` into the dashboard instead of
+  the real version: `docker/metadata-action`'s `version` output resolves to
+  the literal string `"latest"` on a plain push to `main` (no version tag),
+  and that was passed straight through as the `VERSION` build-arg,
+  overriding the Dockerfile's fallback to the repo's `VERSION` file. A new
+  step now only forces a version for an actual `vX.Y.Z` tag push (stripping
+  the `v` prefix); a plain branch push leaves it empty so the Dockerfile
+  fallback applies, same as a local build. **If your dashboard shows
+  `vlatest`:** wait for the next `main` push (or manually re-run the GHCR
+  workflow) to publish a corrected `:latest` image, then redeploy.
+
 ## 4.10.0
 
 ### Added
