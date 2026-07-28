@@ -1,5 +1,12 @@
 # Changelog
 
+## 4.7.1
+
+### Documented (no behavior change)
+
+- Added a dashboard screenshot to README.md ([docs/images/dashboard.png](docs/images/dashboard.png))
+  so the Status page is visible without deploying the service first.
+
 ## 4.7.0
 
 ### Added

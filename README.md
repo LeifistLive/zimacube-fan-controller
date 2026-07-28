@@ -9,6 +9,8 @@ service reads HDD temperatures and array status, derives a target fan speed,
 and writes it to the backplane controller over `i2cset` (i2c-tools) — with a
 responsive web dashboard for monitoring and manual control.
 
+![Dashboard overview](docs/images/dashboard.png)
+
 ## Contents
 
 - [Features](#features)
