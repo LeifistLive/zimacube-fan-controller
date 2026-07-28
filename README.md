@@ -93,16 +93,13 @@ modprobe i2c-dev
 modprobe i2c-i801
 ```
 
-**2. Deploy.** Two options, same image, same environment variables:
-
-- **Portainer git stack (build locally)** — deploy this repository as a Git
-  repository stack. Since the image is built locally, disable **Re-pull
-  image**. See [docs/INSTALL.md](docs/INSTALL.md) for the full walkthrough.
-- **Prebuilt image from GHCR** — use
-  `ghcr.io/leifistlive/zimacube-fan-controller:latest` (published for
-  linux/amd64 and linux/arm64 on every push to `main` and on version tags)
-  in place of the `build:` block in [docker-compose.yml](docker-compose.yml)
-  to skip building the image yourself.
+**2. Deploy.** [docker-compose.yml](docker-compose.yml) pulls the prebuilt
+image `ghcr.io/leifistlive/zimacube-fan-controller:latest` (published for
+linux/amd64 and linux/arm64 on every push to `main` and on version tags) —
+deploy it as a Portainer stack (Git repository or pasted compose) and enable
+**Re-pull image** so redeploying picks up new releases. See
+[docs/INSTALL.md](docs/INSTALL.md) for the full walkthrough, including how
+to build from source locally instead if you've changed the code.
 
 Either way, set the variables from [.env.example](.env.example) as stack
 environment variables, at minimum `ADMIN_PASSWORD`.

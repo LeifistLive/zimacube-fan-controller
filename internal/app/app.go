@@ -711,9 +711,17 @@ func (a *App) evaluate(ctx context.Context) {
 		writeOK = writeErr == nil
 		if writeOK {
 			if valueChanged {
+				// Distinguished from automatic/safety-driven changes so the
+				// event log (and its filter) can single out speeds the
+				// operator set directly, rather than ones the control loop
+				// derived on its own.
+				eventType := "fan-change"
+				if result.Mode == ModeManual {
+					eventType = "fan-change-manual"
+				}
 				a.appendEvent(store.Event{
 					Time:    time.Now(),
-					Type:    "fan-change",
+					Type:    eventType,
 					Message: fmt.Sprintf("%d%%, %s", result.Percent, result.Reason),
 				})
 			}

@@ -221,6 +221,11 @@ Refresh
 <div><h2>Events</h2><div class="muted small">History of mode and fan changes</div></div>
 </div>
 <div class="events-head-actions">
+<select id="eventCategory" class="input category-select">
+<option value="">All types</option>
+<option value="login">Logins</option>
+<option value="fan">Fan</option>
+</select>
 <input id="eventFilter" class="input filter-input" type="text" placeholder="Filter...">
 <button type="button" class="pill-btn pill-danger" id="clearEvents">Clear</button>
 </div>
@@ -463,6 +468,7 @@ color:var(--text);padding:9px 12px;font:inherit;
 .filter-input{width:200px}
 
 .events-head-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.category-select{width:auto;min-width:110px}
 
 .theme-toggle{
 width:38px;height:38px;border-radius:10px;flex:0 0 auto;
@@ -674,6 +680,7 @@ font-size:.62rem;text-align:center;white-space:nowrap;
 @media (max-width:480px){
 .mode-btn{padding:9px 6px;font-size:.78rem}
 .filter-input{width:100%}
+.category-select{width:100%}
 .side-link{font-size:.6rem}
 }`
 
@@ -1018,12 +1025,24 @@ var eventsPageSize = validEventsPageSizes.indexOf(parseInt(localStorage.getItem(
   : 10;
 var eventsPage = 0;
 
+// Badges for event types worth flagging at a glance, instead of making the
+// operator read the message text to tell an operator-driven change or a
+// login attempt apart from routine automatic entries.
+var eventTypeBadges = {
+  "fan-change-manual": {label: "Manual", cls: "badge-yellow"},
+  "login": {label: "Login", cls: "badge-green"},
+  "login-failed": {label: "Login failed", cls: "badge-red"}
+};
+
 // Rows are built with DOM nodes instead of innerHTML, because event messages
 // contain values from var.ini and from user defined profile names.
 function renderEvents() {
   var query = byId("eventFilter").value.trim().toLowerCase();
+  var category = byId("eventCategory").value;
   var filtered = lastEvents.slice().reverse().filter(function (event) {
-    var haystack = (String(event.type) + " " + String(event.message)).toLowerCase();
+    var type = String(event.type).toLowerCase();
+    if (category && type.indexOf(category) !== 0) { return false; }
+    var haystack = type + " " + String(event.message).toLowerCase();
     return !query || haystack.indexOf(query) !== -1;
   });
 
@@ -1038,11 +1057,28 @@ function renderEvents() {
   body.textContent = "";
   pageItems.forEach(function (event) {
     var tr = document.createElement("tr");
-    [new Date(event.time).toLocaleString(), event.type, event.message].forEach(function (cell) {
-      var td = document.createElement("td");
-      td.textContent = cell === null || cell === undefined ? "" : String(cell);
-      tr.appendChild(td);
-    });
+
+    var timeTd = document.createElement("td");
+    timeTd.textContent = new Date(event.time).toLocaleString();
+    tr.appendChild(timeTd);
+
+    var typeTd = document.createElement("td");
+    var badgeInfo = eventTypeBadges[event.type];
+    if (badgeInfo) {
+      var badge = document.createElement("span");
+      badge.className = "badge " + badgeInfo.cls;
+      badge.style.marginLeft = "0";
+      badge.textContent = badgeInfo.label;
+      typeTd.appendChild(badge);
+    } else {
+      typeTd.textContent = String(event.type);
+    }
+    tr.appendChild(typeTd);
+
+    var messageTd = document.createElement("td");
+    messageTd.textContent = event.message === null || event.message === undefined ? "" : String(event.message);
+    tr.appendChild(messageTd);
+
     body.appendChild(tr);
   });
 
@@ -1271,6 +1307,10 @@ function wire() {
   byId("reloadConfig").addEventListener("click", function () { refreshConfig(true); });
   byId("config").addEventListener("input", function () { configDirty = true; });
   byId("eventFilter").addEventListener("input", function () {
+    eventsPage = 0;
+    renderEvents();
+  });
+  byId("eventCategory").addEventListener("change", function () {
     eventsPage = 0;
     renderEvents();
   });

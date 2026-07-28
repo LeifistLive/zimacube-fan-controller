@@ -22,6 +22,11 @@ session cookie automatically gets `Secure` as soon as the request arrives
 over TLS (directly, or via `X-Forwarded-Proto: https` behind a reverse
 proxy) – it stays usable unchanged over plain HTTP on the LAN.
 
+Every login attempt is recorded as an event, including the client IP:
+successes as `login` (`"login succeeded from <ip>"`), failures as
+`login-failed` (`"failed login attempt for \"<user>\" from <ip>"`). The
+dashboard's Events page can filter to just these via its category dropdown.
+
 ## Read
 
 - `GET /api/status`

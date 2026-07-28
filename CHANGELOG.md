@@ -1,5 +1,42 @@
 # Changelog
 
+## 4.10.0
+
+### Added
+
+- Login attempts are now recorded in the event log, including the client
+  IP: successes as `login` (green badge), failures as `login-failed` (red
+  badge, includes the attempted username). The Events page gained a
+  category dropdown ("All types" / "Logins" / "Fan") next to the text
+  filter, so either group can be isolated with one click instead of typing
+  a keyword.
+
+## 4.9.0
+
+### Added
+
+- Fan-change events triggered by a manual override now log as
+  `fan-change-manual` instead of the plain `fan-change` used for
+  automatic/safety-driven changes, and the dashboard's Events page shows
+  them with a "Manual" badge in the Type column instead of the raw type
+  string — so an operator-set speed is visible at a glance, not just
+  buried in the message text.
+
+## 4.8.0
+
+### Changed
+
+- `docker-compose.yml` now pulls the prebuilt
+  `ghcr.io/leifistlive/zimacube-fan-controller:latest` image (published by
+  `.github/workflows/ghcr.yml` on every push to `main` and on version tags)
+  instead of building from source on every deploy — faster deploys/updates,
+  and Portainer's **Re-pull image** now actually does something (enable it).
+  **If you're updating an existing stack:** the next redeploy will start
+  pulling the published image instead of rebuilding from the repo, which
+  matters if you had local, uncommitted changes to the code — see
+  "Building Locally Instead" in [docs/INSTALL.md](docs/INSTALL.md) to keep
+  building from source.
+
 ## 4.7.1
 
 ### Documented (no behavior change)

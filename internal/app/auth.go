@@ -14,6 +14,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/LeifistLive/zimacube-fan-controller/internal/store"
 	"github.com/LeifistLive/zimacube-fan-controller/internal/webui"
 )
 
@@ -278,6 +279,11 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	user, password, ok := r.BasicAuth()
 	if !ok || !a.auth.verify(user, password) {
+		a.appendEvent(store.Event{
+			Time:    time.Now(),
+			Type:    "login-failed",
+			Message: fmt.Sprintf("failed login attempt for %q from %s", user, clientIP(r)),
+		})
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid username or password"})
 		return
 	}
@@ -288,6 +294,11 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.SetCookie(w, sessionCookie(r, session, int(sessionTTL.Seconds())))
+	a.appendEvent(store.Event{
+		Time:    time.Now(),
+		Type:    "login",
+		Message: fmt.Sprintf("login succeeded from %s", clientIP(r)),
+	})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
