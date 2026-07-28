@@ -126,11 +126,15 @@ func (s *Store) LoadJSON(name string, value any) error {
 
 // Remove deletes name and fsyncs the directory, so a power loss right after
 // clearing e.g. override.json cannot leave the old file back on disk (the
-// same durability guarantee SaveJSON already gives the write path).
+// same durability guarantee SaveJSON already gives the write path). Also
+// drops any cached line count for name, so a subsequent appendJSONLine
+// recomputes it instead of carrying over a stale count from before the file
+// was removed.
 func (s *Store) Remove(name string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	delete(s.counts, name)
 	err := os.Remove(filepath.Join(s.dir, name))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
@@ -139,6 +143,12 @@ func (s *Store) Remove(name string) error {
 		return err
 	}
 	return syncDir(s.dir)
+}
+
+// ClearEvents deletes events.jsonl entirely; the next AppendEvent recreates
+// it. Used by the dashboard's "clear events" action.
+func (s *Store) ClearEvents() error {
+	return s.Remove(eventsFile)
 }
 
 func (s *Store) AppendHistory(point HistoryPoint) error {

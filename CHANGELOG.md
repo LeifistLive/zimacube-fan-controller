@@ -1,5 +1,17 @@
 # Changelog
 
+## 4.7.0
+
+### Added
+
+- A "Clear" button on the Events page permanently deletes the event log,
+  behind an in-dashboard confirmation popup (not a native browser dialog).
+  Confirming immediately records one new event noting that the log was
+  cleared, so the list is never left looking broken and there is a small
+  audit trail of when it happened. New `POST /api/events/clear` endpoint,
+  rate-limited like the other write endpoints and requiring a session like
+  everything else in the dashboard.
+
 ## 4.6.0
 
 ### Changed

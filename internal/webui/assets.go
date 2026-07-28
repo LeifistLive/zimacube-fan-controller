@@ -220,7 +220,10 @@ Refresh
 <span class="icon-box"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="3.5" cy="6" r="0.9" fill="currentColor" stroke="none"/><line x1="7" y1="6" x2="17" y2="6"/><circle cx="3.5" cy="10" r="0.9" fill="currentColor" stroke="none"/><line x1="7" y1="10" x2="17" y2="10"/><circle cx="3.5" cy="14" r="0.9" fill="currentColor" stroke="none"/><line x1="7" y1="14" x2="17" y2="14"/></svg></span>
 <div><h2>Events</h2><div class="muted small">History of mode and fan changes</div></div>
 </div>
+<div class="events-head-actions">
 <input id="eventFilter" class="input filter-input" type="text" placeholder="Filter...">
+<button type="button" class="pill-btn pill-danger" id="clearEvents">Clear</button>
+</div>
 </div>
 <div class="table-wrap">
 <table>
@@ -262,6 +265,17 @@ Refresh
 </div>
 </section>
 
+</div>
+</div>
+
+<div class="modal-overlay" id="clearEventsOverlay" hidden>
+<div class="modal-card">
+<h3>Clear event log?</h3>
+<p class="muted small">This permanently deletes every recorded event. This cannot be undone.</p>
+<div class="controls-row mt">
+<button type="button" class="pill-btn" id="clearEventsCancel">Cancel</button>
+<button type="button" class="pill-btn pill-danger" id="clearEventsConfirm">Clear events</button>
+</div>
 </div>
 </div>
 
@@ -448,6 +462,8 @@ color:var(--text);padding:9px 12px;font:inherit;
 .num-input{width:90px}
 .filter-input{width:200px}
 
+.events-head-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
 .theme-toggle{
 width:38px;height:38px;border-radius:10px;flex:0 0 auto;
 border:1px solid var(--border-soft);background:var(--card-2);color:var(--text);
@@ -605,6 +621,21 @@ padding:32px 28px;text-align:center;
 .login-submit{width:100%;justify-content:center;margin-top:18px}
 .login-error{color:#fca5a5;font-size:.82rem;margin-top:12px}
 .login-error[hidden]{display:none}
+
+.modal-overlay{
+position:fixed;inset:0;background:rgba(0,0,0,.55);
+display:flex;align-items:center;justify-content:center;padding:20px;z-index:50;
+}
+/* Same cascade gotcha as .chart-tooltip/.login-error: an author rule that
+   sets display always wins over the UA [hidden]{display:none} rule at equal
+   specificity, so the hidden attribute needs this explicit override here too. */
+.modal-overlay[hidden]{display:none}
+.modal-card{
+background:var(--card);border:1px solid var(--border);border-radius:var(--radius-card);
+padding:22px 24px;max-width:360px;width:100%;
+}
+.modal-card h3{margin:0 0 8px;font-size:1rem;font-weight:700}
+.modal-card p{margin:0}
 
 /* Below 900px the sidebar becomes a floating bottom capsule instead of a
    horizontally scrolling row: five items plus the full-width brand no
@@ -1258,6 +1289,25 @@ function wire() {
   byId("eventsNext").addEventListener("click", function () {
     eventsPage++;
     renderEvents();
+  });
+
+  var clearEventsOverlay = byId("clearEventsOverlay");
+  byId("clearEvents").addEventListener("click", function () {
+    clearEventsOverlay.hidden = false;
+  });
+  byId("clearEventsCancel").addEventListener("click", function () {
+    clearEventsOverlay.hidden = true;
+  });
+  clearEventsOverlay.addEventListener("click", function (event) {
+    if (event.target === clearEventsOverlay) { clearEventsOverlay.hidden = true; }
+  });
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && !clearEventsOverlay.hidden) { clearEventsOverlay.hidden = true; }
+  });
+  byId("clearEventsConfirm").addEventListener("click", async function () {
+    clearEventsOverlay.hidden = true;
+    eventsPage = 0;
+    if (await post("/api/events/clear")) { refreshEvents(); }
   });
 
   document.querySelectorAll("[data-test]").forEach(function (button) {

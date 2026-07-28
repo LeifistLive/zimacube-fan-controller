@@ -209,6 +209,7 @@ func New(cfg Config) (*App, error) {
 			"profile":  {},
 			"config":   {},
 			"test":     {},
+			"events":   {},
 		},
 	}
 	auth, err := newAuth(cfg.AdminUser, cfg.AdminPassword)

@@ -38,15 +38,21 @@ proxy) – it stays usable unchanged over plain HTTP on the LAN.
 - `POST /api/profile/{name}`
 - `POST /api/test/{1-100}`
 - `POST /api/config`
+- `POST /api/events/clear`
 
 Independently of the session, requests with a foreign `Origin` or
 `Sec-Fetch-Site: cross-site` are rejected with 403.
 
 Write endpoints are limited per category (override: `fan`/`mode/auto`/
-`mode/emergency`, `profile`, `config`, `test`) to one write per second; a
-violation returns 429. `POST /api/test/{percent}` additionally allows only
-one active test at a time (409 if one is already running) and then has its
-own 5-second cooldown (429 during that time).
+`mode/emergency`, `profile`, `config`, `test`, `events`) to one write per
+second; a violation returns 429. `POST /api/test/{percent}` additionally
+allows only one active test at a time (409 if one is already running) and
+then has its own 5-second cooldown (429 during that time).
+
+`POST /api/events/clear` permanently deletes every recorded event, then
+immediately records one new event noting that the log was cleared — so the
+list is never left looking broken right after a successful clear, and there
+is a small audit trail of when it happened.
 
 ## Status Fields
 

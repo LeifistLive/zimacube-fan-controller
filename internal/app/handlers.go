@@ -57,6 +57,7 @@ func (a *App) Routes() http.Handler {
 	mux.HandleFunc("POST /api/profile/{name}", a.requireAuth(a.guardWrite("profile", a.handleProfile)))
 	mux.HandleFunc("POST /api/config", a.requireAuth(a.guardWrite("config", a.handleConfigUpdate)))
 	mux.HandleFunc("POST /api/test/{percent}", a.requireAuth(a.guardWrite("test", a.handleFanTest)))
+	mux.HandleFunc("POST /api/events/clear", a.requireAuth(a.guardWrite("events", a.handleClearEvents)))
 
 	return securityHeaders(mux)
 }
@@ -171,6 +172,24 @@ func (a *App) handleEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, events)
+}
+
+// handleClearEvents deletes every recorded event. A marker event is written
+// immediately afterwards, both as a small audit trail (something did clear
+// the log, and when) and so the dashboard's event list is not left looking
+// broken/empty right after the action that just succeeded.
+func (a *App) handleClearEvents(w http.ResponseWriter, _ *http.Request) {
+	if err := a.store.ClearEvents(); err != nil {
+		a.setStorageOK(storageEvents, false)
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	a.appendEvent(store.Event{
+		Time:    time.Now(),
+		Type:    "log",
+		Message: "event log cleared",
+	})
+	writeJSON(w, http.StatusOK, map[string]string{"status": "cleared"})
 }
 
 func (a *App) handleConfig(w http.ResponseWriter, _ *http.Request) {

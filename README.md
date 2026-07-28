@@ -46,7 +46,8 @@ responsive web dashboard for monitoring and manual control.
   history charts (hover for exact values), and per-HDD temperature tiles
 - A single mode switch (Automatic / Manual / Emergency) plus manual test
   buttons
-- Event log with a filter and a selectable page size (10 or 25 per page)
+- Event log with a filter, a selectable page size (10 or 25 per page), and a
+  confirmation-gated clear action
 - Light/dark theme toggle (defaults to dark)
 
 **Security & API**
