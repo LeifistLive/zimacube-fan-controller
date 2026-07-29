@@ -106,9 +106,11 @@ optional `target_temperature` (0 means "unused") must be between 20 and 100
 if set. Unknown JSON fields and data after the JSON object are rejected.
 Rejected configurations change nothing.
 
-`config_version` identifies the configuration format (currently `1`). If the
-field is missing (a configuration from before this change), version 1 is
-silently assumed; a version higher than this binary supports is rejected.
+`config_version` identifies the configuration format (currently `2`). If the
+field is missing, version 0 is assumed; a version higher than this binary
+supports is rejected. Loading a config below version 2 also backfills the
+built-in "Target Temp" profile if it is missing, so upgrading from an older
+version does not require a manual JSON edit to see it.
 
 A fan test (`POST /api/test/{percent}`) is rejected with 409 if the value
 would fall below the current emergency, failsafe, or array-boost floor; the

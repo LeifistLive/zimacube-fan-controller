@@ -15,6 +15,14 @@
   from the profile table's Activate button; Automatic/Manual/Emergency stay
   the only mode-switch options.
 
+### Fixed
+
+- An existing `config.json` from before this release never gained the new
+  Target Temp profile on its own (loading a config fully replaces the
+  in-memory profile list, defaults included). `config_version` is now `2`;
+  loading anything below that backfills the missing profile once, without
+  touching the operator's existing Silent/Balanced/Performance edits.
+
 ### Changed
 
 - The "I²C Controller" info card is fully reworked for narrow phone

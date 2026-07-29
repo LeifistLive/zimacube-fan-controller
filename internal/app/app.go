@@ -371,6 +371,17 @@ func normalizeRuntimeConfig(in RuntimeConfig) (RuntimeConfig, error) {
 		out.Profiles[name] = profile
 	}
 
+	// One-time migration: a config.json saved before config_version 2 never
+	// had the built-in "target-temp" profile, so it would otherwise be stuck
+	// missing from the profile table until someone hand-edits the JSON. This
+	// only fires for configs below version 2; one already saved at 2 is left
+	// alone whether the profile was kept, renamed, or deliberately removed.
+	if in.ConfigVersion < 2 {
+		if _, ok := out.Profiles["target-temp"]; !ok {
+			out.Profiles["target-temp"] = defaultRuntimeConfig().Profiles["target-temp"]
+		}
+	}
+
 	if _, ok := out.Profiles[out.ActiveProfile]; !ok {
 		return RuntimeConfig{}, fmt.Errorf("active profile %q does not exist", out.ActiveProfile)
 	}

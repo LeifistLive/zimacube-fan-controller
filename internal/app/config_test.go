@@ -132,10 +132,21 @@ func TestLoadRuntimeConfigDoesNotMergeDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadRuntimeConfig: %v", err)
 	}
-	if len(loaded.Profiles) != 1 {
-		t.Fatalf("expected exactly one profile, have %d: %v", len(loaded.Profiles), loaded.Profiles)
+	// "target-temp" is expected here: ConfigVersion is 0 (pre-version-2), so
+	// the one-time migration backfills it (see
+	// TestNormalizeBackfillsTargetTempProfileBelowVersion2). Every other
+	// deleted default must stay gone.
+	if len(loaded.Profiles) != 2 {
+		t.Fatalf("expected exactly two profiles (only-one + migrated target-temp), have %d: %v",
+			len(loaded.Profiles), loaded.Profiles)
+	}
+	if _, ok := loaded.Profiles["target-temp"]; !ok {
+		t.Fatal("expected target-temp to be backfilled for a pre-version-2 config")
 	}
 	if _, ok := loaded.Profiles["balanced"]; ok {
+		t.Fatal("deleted default profile came back")
+	}
+	if _, ok := loaded.Profiles["silent"]; ok {
 		t.Fatal("deleted default profile came back")
 	}
 }
@@ -183,6 +194,55 @@ func TestNormalizeMigratesMissingConfigVersion(t *testing.T) {
 	}
 	if normalized.ConfigVersion != currentConfigVersion {
 		t.Fatalf("ConfigVersion = %d, expected %d", normalized.ConfigVersion, currentConfigVersion)
+	}
+}
+
+// Regression: a config.json saved before config_version 2 (i.e. before the
+// Target Temp profile existed) must gain it automatically, so upgrading
+// installations see it without a manual JSON edit.
+func TestNormalizeBackfillsTargetTempProfileBelowVersion2(t *testing.T) {
+	input := RuntimeConfig{
+		ConfigVersion: 1,
+		ActiveProfile: "p",
+		Profiles: map[string]Profile{
+			"p": {
+				Curve:                mustCurve(t, "0:60,48:100"),
+				ArrayBoostPercent:    100,
+				EmergencyTemperature: 52,
+				EmergencyPercent:     100,
+			},
+		},
+	}
+	normalized, err := normalizeRuntimeConfig(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := normalized.Profiles["target-temp"]; !ok {
+		t.Fatal("expected target-temp profile to be backfilled for a pre-version-2 config")
+	}
+}
+
+// Regression: once a config is saved at version 2, a deliberately removed
+// (or renamed) target-temp profile must not keep reappearing on restart.
+func TestNormalizeDoesNotReintroduceTargetTempAtVersion2(t *testing.T) {
+	input := RuntimeConfig{
+		ConfigVersion: 2,
+		ActiveProfile: "p",
+		Profiles: map[string]Profile{
+			"p": {
+				Curve:                mustCurve(t, "0:60,48:100"),
+				ArrayBoostPercent:    100,
+				EmergencyTemperature: 52,
+				EmergencyPercent:     100,
+			},
+		},
+	}
+	normalized, err := normalizeRuntimeConfig(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, ok := normalized.Profiles["target-temp"]; ok {
+		t.Fatal("a config already at version 2 must not have target-temp reintroduced")
 	}
 }
 

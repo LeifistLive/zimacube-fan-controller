@@ -50,7 +50,10 @@ func severityForMode(mode string) string {
 // currentConfigVersion is bumped whenever RuntimeConfig's on-disk shape
 // changes in a way that needs migration. normalizeRuntimeConfig is the one
 // place that translates an older (or missing) version into the current one.
-const currentConfigVersion = 1
+//
+// 2: backfills the built-in "target-temp" profile into configs saved before
+// it existed, so upgrading installations see it without a manual JSON edit.
+const currentConfigVersion = 2
 
 // maxProfileNameLength bounds both a profile's map key and its display name.
 // Neither had a limit before, so an API caller could otherwise bloat
