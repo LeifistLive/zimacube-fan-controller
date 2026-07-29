@@ -152,7 +152,7 @@ Refresh
 </div>
 <div class="table-wrap">
 <table>
-<thead><tr><th>Profile</th><th>Boost</th><th>Emergency</th><th>Status</th></tr></thead>
+<thead><tr><th>Profile</th><th>Boost</th><th>Target</th><th>Emergency</th><th>Status</th></tr></thead>
 <tbody id="profileTable"></tbody>
 </table>
 </div>
@@ -231,6 +231,7 @@ Refresh
 <option value="">All types</option>
 <option value="login">Logins</option>
 <option value="fan">Fan</option>
+<option value="severe">Warnings &amp; critical</option>
 </select>
 <input id="eventFilter" class="input filter-input" type="text" placeholder="Filter...">
 <button type="button" class="pill-btn pill-danger" id="clearEvents">Clear</button>
@@ -695,6 +696,23 @@ font-size:.62rem;text-align:center;white-space:nowrap;
 .filter-input{width:100%}
 .category-select{width:100%}
 .side-link{font-size:.6rem}
+/* The version badge duplicates #version already shown in the page header,
+   and at this width it had nowhere to go but its own orphaned-looking line
+   inside the title - simplest fix is to just not show it twice. */
+#infoVersion{display:none}
+.info-title{gap:6px 8px}
+/* The border-right divider trick between meta items only reads cleanly
+   inline; once flex-wrap breaks the list across lines, whichever span ends
+   up last on a line keeps a dangling border that belongs to the item after
+   it. Stacking one-per-line sidesteps that entirely instead of trying to
+   patch the wrap. */
+.info-meta{flex-direction:column;align-items:flex-start;gap:4px}
+.info-meta span{border-right:none;padding-right:0;margin-right:0}
+/* Forces the online/offline pill onto its own full-width row (a flex item
+   with basis 100% always starts a new line) instead of leaving it to land
+   wherever the wrap algorithm happens to put it next to a variable-length
+   title/meta block. */
+.info-status-wrap{flex-basis:100%;justify-content:flex-end;padding-top:10px;margin-top:2px;border-top:1px solid var(--border)}
 }`
 
 const ScriptJS = `"use strict";
@@ -802,6 +820,7 @@ function labelForMode(mode) {
   switch (mode) {
     case "automatic": return "Automatic";
     case "manual": return "Manual";
+    case "target-temp": return "Target Temp";
     case "emergency": return "Emergency";
     case "array-boost": return "Array Boost";
     case "failsafe": return "Failsafe";
@@ -813,7 +832,7 @@ function badgeClassForMode(mode) {
   switch (mode) {
     case "emergency": case "failsafe": return "badge-red";
     case "array-boost": return "badge-yellow";
-    case "automatic": return "badge-green";
+    case "automatic": case "target-temp": return "badge-green";
     default: return "badge-neutral";
   }
 }
@@ -842,9 +861,19 @@ function metaSpan(container, text) {
   container.appendChild(span);
 }
 
+// Reflects live values in the browser tab itself, so a background tab (or a
+// row of tabs) shows the current fan/temperature without needing focus.
+function updateTitle(status) {
+  var fanPart = status.target_percent + "%";
+  var tempPart = status.temperature_valid ? status.maximum_disk_temperature + "°C" : "?";
+  document.title = fanPart + " · " + tempPart + " – ZimaCube";
+}
+
 async function refreshStatus() {
   var data = await getJSON("/api/status");
   var status = data.status;
+
+  updateTitle(status);
 
   byId("version").textContent = status.version ? "v" + status.version : "";
   byId("infoVersion").textContent = status.version ? "v" + status.version : "";
@@ -945,8 +974,8 @@ function renderDiskGrid(disks) {
 // genuinely different committed override (e.g. Emergency set from another
 // tab) must win over a stale local click.
 function effectiveMode(serverMode) {
-  if (localModeOverride === "manual") {
-    if (serverMode === "" || serverMode === "manual") { return "manual"; }
+  if (localModeOverride) {
+    if (serverMode === "" || serverMode === localModeOverride) { return localModeOverride; }
     localModeOverride = null;
   }
   return serverMode || "automatic";
@@ -959,9 +988,8 @@ function setModeUI(mode) {
   document.querySelectorAll(".mode-btn").forEach(function (btn) {
     btn.classList.toggle("active", btn.dataset.setMode === mode);
   });
-  var showExtra = mode === "manual";
-  byId("manualRow").hidden = !showExtra;
-  byId("testRow").hidden = !showExtra;
+  byId("manualRow").hidden = mode !== "manual";
+  byId("testRow").hidden = mode !== "manual";
 }
 
 // The segmented mode control reflects the requested override (empty/"" means
@@ -986,6 +1014,9 @@ function renderProfileTable() {
     var boostTd = document.createElement("td");
     boostTd.textContent = (profile.boost === undefined ? "-" : profile.boost + " %");
 
+    var targetTd = document.createElement("td");
+    targetTd.textContent = profile.targetTemp ? profile.targetTemp + " °C" : "–";
+
     var emergencyTd = document.createElement("td");
     emergencyTd.textContent = (profile.emergencyTemp === undefined ? "-" : profile.emergencyTemp + " °C");
 
@@ -1009,6 +1040,7 @@ function renderProfileTable() {
 
     tr.appendChild(nameTd);
     tr.appendChild(boostTd);
+    tr.appendChild(targetTd);
     tr.appendChild(emergencyTd);
     tr.appendChild(statusTd);
     body.appendChild(tr);
@@ -1024,7 +1056,10 @@ async function refreshConfig(force) {
   var profiles = config.profiles || {};
   lastProfiles = Object.keys(profiles).map(function (id) {
     var profile = profiles[id] || {};
-    return { id: id, label: profile.name || id, boost: profile.array_boost_percent, emergencyTemp: profile.emergency_temperature };
+    return {
+      id: id, label: profile.name || id, boost: profile.array_boost_percent,
+      emergencyTemp: profile.emergency_temperature, targetTemp: profile.target_temperature
+    };
   });
   var current = profiles[config.active_profile];
   if (current && current.emergency_temperature) { activeEmergencyTemp = current.emergency_temperature; }
@@ -1047,6 +1082,14 @@ var eventTypeBadges = {
   "login-failed": {label: "Login failed", cls: "badge-red"}
 };
 
+// Left-border colors for Status.Severity, applied to the Time cell so
+// warnings/critical entries stand out down the left edge of the table at a
+// glance, independent of which badge (if any) the type itself gets.
+var severityBorders = {
+  warning: "3px solid var(--yellow)",
+  critical: "3px solid var(--red)"
+};
+
 // Rows are built with DOM nodes instead of innerHTML, because event messages
 // contain values from var.ini and from user defined profile names.
 function renderEvents() {
@@ -1054,7 +1097,11 @@ function renderEvents() {
   var category = byId("eventCategory").value;
   var filtered = lastEvents.slice().reverse().filter(function (event) {
     var type = String(event.type).toLowerCase();
-    if (category && type.indexOf(category) !== 0) { return false; }
+    if (category === "severe") {
+      if (event.severity !== "warning" && event.severity !== "critical") { return false; }
+    } else if (category && type.indexOf(category) !== 0) {
+      return false;
+    }
     var haystack = type + " " + String(event.message).toLowerCase();
     return !query || haystack.indexOf(query) !== -1;
   });
@@ -1073,6 +1120,7 @@ function renderEvents() {
 
     var timeTd = document.createElement("td");
     timeTd.textContent = new Date(event.time).toLocaleString();
+    timeTd.style.borderLeft = severityBorders[event.severity] || "3px solid transparent";
     tr.appendChild(timeTd);
 
     var typeTd = document.createElement("td");

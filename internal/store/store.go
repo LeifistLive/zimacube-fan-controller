@@ -34,9 +34,10 @@ type HistoryPoint struct {
 }
 
 type Event struct {
-	Time    time.Time `json:"time"`
-	Type    string    `json:"type"`
-	Message string    `json:"message"`
+	Time     time.Time `json:"time"`
+	Type     string    `json:"type"`
+	Message  string    `json:"message"`
+	Severity string    `json:"severity,omitempty"`
 }
 
 type Store struct {

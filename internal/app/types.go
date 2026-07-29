@@ -17,10 +17,35 @@ var Version = "dev"
 const (
 	ModeAutomatic  = "automatic"
 	ModeManual     = "manual"
+	ModeTargetTemp = "target-temp"
 	ModeEmergency  = "emergency"
 	ModeArrayBoost = "array-boost"
 	ModeFailsafe   = "failsafe"
 )
+
+// Severity levels attached to store.Event.Severity, so the dashboard's event
+// log can flag what actually needs attention instead of only differing by
+// type/color per event kind.
+const (
+	SeverityInfo     = "info"
+	SeverityWarning  = "warning"
+	SeverityCritical = "critical"
+)
+
+// severityForMode reflects how urgent the mode itself is: emergency means the
+// temperature genuinely crossed the threshold (or was forced), failsafe/
+// array-boost are safety responses worth noticing but not acute, and
+// automatic/manual are routine operation.
+func severityForMode(mode string) string {
+	switch mode {
+	case ModeEmergency:
+		return SeverityCritical
+	case ModeFailsafe, ModeArrayBoost:
+		return SeverityWarning
+	default:
+		return SeverityInfo
+	}
+}
 
 // currentConfigVersion is bumped whenever RuntimeConfig's on-disk shape
 // changes in a way that needs migration. normalizeRuntimeConfig is the one
@@ -40,6 +65,14 @@ type Profile struct {
 	EmergencyTemperature int              `json:"emergency_temperature"`
 	EmergencyPercent     int              `json:"emergency_percent"`
 	HysteresisC          int              `json:"hysteresis_c"`
+	// TargetTemperature turns this profile into a target-temperature profile:
+	// instead of following Curve, the control loop steps the fan speed
+	// up/down each cycle trying to keep the highest HDD temperature at or
+	// below this value. Zero (the default) means "use Curve as normal" - the
+	// curve is still validated and kept even on a target-temperature
+	// profile, so clearing this field later falls back to it rather than
+	// leaving the profile without any curve at all.
+	TargetTemperature int `json:"target_temperature,omitempty"`
 }
 
 type RuntimeConfig struct {

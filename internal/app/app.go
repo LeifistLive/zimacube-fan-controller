@@ -230,9 +230,10 @@ func New(cfg Config) (*App, error) {
 	default:
 		log.Printf("[WARN] %s ignored (%v), using default profiles", configFile, err)
 		_ = st.AppendEvent(store.Event{
-			Time:    time.Now(),
-			Type:    "config",
-			Message: configFile + " unusable: " + err.Error(),
+			Time:     time.Now(),
+			Type:     "config",
+			Message:  configFile + " unusable: " + err.Error(),
+			Severity: SeverityWarning,
 		})
 	}
 
@@ -292,6 +293,19 @@ func defaultRuntimeConfig() RuntimeConfig {
 				EmergencyPercent:     100,
 				HysteresisC:          1,
 			},
+			"target-temp": {
+				Name: "Target Temp",
+				// Kept so this profile still has a sane curve to fall back
+				// to if TargetTemperature is ever cleared - unused while it
+				// is set, since that replaces the curve as the "automatic"
+				// behavior (see decide()).
+				Curve:                must("0:60,36:65,40:75,43:85,46:95,48:100"),
+				ArrayBoostPercent:    100,
+				EmergencyTemperature: 52,
+				EmergencyPercent:     100,
+				HysteresisC:          2,
+				TargetTemperature:    40,
+			},
 		},
 	}
 }
@@ -330,7 +344,7 @@ func normalizeRuntimeConfig(in RuntimeConfig) (RuntimeConfig, error) {
 		}
 		curve, err := profile.Curve.Normalized()
 		if err != nil {
-			return RuntimeConfig{}, fmt.Errorf("Profil %q: %w", name, err)
+			return RuntimeConfig{}, fmt.Errorf("profile %q: %w", name, err)
 		}
 		if err := checkPercent("array_boost_percent", name, profile.ArrayBoostPercent); err != nil {
 			return RuntimeConfig{}, err
@@ -345,6 +359,10 @@ func normalizeRuntimeConfig(in RuntimeConfig) (RuntimeConfig, error) {
 		if profile.HysteresisC < 0 || profile.HysteresisC > 20 {
 			return RuntimeConfig{}, fmt.Errorf("profile %q: hysteresis_c %d is not between 0 and 20",
 				name, profile.HysteresisC)
+		}
+		if profile.TargetTemperature != 0 && (profile.TargetTemperature < 20 || profile.TargetTemperature > 100) {
+			return RuntimeConfig{}, fmt.Errorf("profile %q: target_temperature %d is not between 20 and 100",
+				name, profile.TargetTemperature)
 		}
 		if strings.TrimSpace(profile.Name) == "" {
 			profile.Name = name
@@ -434,9 +452,10 @@ func (a *App) ApplySafeState(percent int) {
 	// written before Docker terminated the process.
 	log.Printf("[OK] safe-shutdown speed %d%% written before the service stops", percent)
 	a.appendEvent(store.Event{
-		Time:    time.Now(),
-		Type:    "shutdown",
-		Message: fmt.Sprintf("shutdown speed %d%% set", percent),
+		Time:     time.Now(),
+		Type:     "shutdown",
+		Message:  fmt.Sprintf("shutdown speed %d%% set", percent),
+		Severity: SeverityInfo,
 	})
 }
 
@@ -495,15 +514,36 @@ func (a *App) appendHistory(point store.HistoryPoint) {
 func decide(profile Profile, reading sample, override Override, lastFan int) decision {
 	failsafe := failsafePercent(profile)
 
-	result := decision{
-		Percent: profile.Curve.Speed(reading.Temperature),
-		Mode:    ModeAutomatic,
-		Reason:  fmt.Sprintf("temperature curve: highest HDD temperature %d °C", reading.Temperature),
-	}
-	if !reading.Valid {
-		result.Percent = failsafe
-		result.Mode = ModeFailsafe
-		result.Reason = "HDD temperature unknown, safety speed"
+	var result decision
+	if profile.TargetTemperature > 0 {
+		// A target-temperature profile replaces the curve as the "automatic"
+		// behavior: step the fan speed toward keeping the array at or below
+		// the profile's configured target instead of following fixed points.
+		if !reading.Valid {
+			result = decision{Percent: failsafe, Mode: ModeFailsafe, Reason: "HDD temperature unknown, safety speed"}
+		} else {
+			start := lastFan
+			if start <= 0 {
+				start = failsafe
+			}
+			result = decision{
+				Percent: targetTemperatureStep(reading.Temperature, profile.TargetTemperature, start),
+				Mode:    ModeTargetTemp,
+				Reason: fmt.Sprintf("keeping HDDs at or below %d °C (currently %d °C)",
+					profile.TargetTemperature, reading.Temperature),
+			}
+		}
+	} else {
+		result = decision{
+			Percent: profile.Curve.Speed(reading.Temperature),
+			Mode:    ModeAutomatic,
+			Reason:  fmt.Sprintf("temperature curve: highest HDD temperature %d °C", reading.Temperature),
+		}
+		if !reading.Valid {
+			result.Percent = failsafe
+			result.Mode = ModeFailsafe
+			result.Reason = "HDD temperature unknown, safety speed"
+		}
 	}
 
 	switch override.Mode {
@@ -562,6 +602,32 @@ func failsafePercent(profile Profile) int {
 		percent = controller.MaxPercent
 	}
 	return percent
+}
+
+// Step sizes for ModeTargetTemp: a bigger upward step than downward, so the
+// loop reacts quickly to rising temperatures but backs off gradually instead
+// of oscillating the fan speed every cycle. targetTempBandC keeps it from
+// stepping down again until the temperature is comfortably under the
+// target, not just barely at it.
+const (
+	targetTempStepUp   = 8
+	targetTempStepDown = 4
+	targetTempBandC    = 2
+)
+
+// targetTemperatureStep is the pure feedback step for ModeTargetTemp: nudge
+// the previous speed up while above target, down once comfortably under it,
+// and hold steady in between. decide() clamps the result to
+// MinPercent/MaxPercent same as every other mode.
+func targetTemperatureStep(currentTemp, target, lastPercent int) int {
+	switch {
+	case currentTemp > target:
+		return lastPercent + targetTempStepUp
+	case currentTemp <= target-targetTempBandC:
+		return lastPercent - targetTempStepDown
+	default:
+		return lastPercent
+	}
 }
 
 // fanTestFloor mirrors decide()'s safety minimums: a manual fan test must
@@ -650,9 +716,10 @@ func (a *App) evaluate(ctx context.Context) {
 	if tempErr != nil && previousTempOK {
 		log.Printf("[ERROR] HDD temperature unreadable (%v), safety speed active", tempErr)
 		a.appendEvent(store.Event{
-			Time:    now,
-			Type:    "sensor",
-			Message: "HDD temperature unreadable: " + tempErr.Error(),
+			Time:     now,
+			Type:     "sensor",
+			Message:  "HDD temperature unreadable: " + tempErr.Error(),
+			Severity: SeverityWarning,
 		})
 	}
 	if tempErr == nil && !previousTempOK {
@@ -720,9 +787,10 @@ func (a *App) evaluate(ctx context.Context) {
 					eventType = "fan-change-manual"
 				}
 				a.appendEvent(store.Event{
-					Time:    time.Now(),
-					Type:    eventType,
-					Message: fmt.Sprintf("%d%%, %s", result.Percent, result.Reason),
+					Time:     time.Now(),
+					Type:     eventType,
+					Message:  fmt.Sprintf("%d%%, %s", result.Percent, result.Reason),
+					Severity: severityForMode(result.Mode),
 				})
 			}
 		} else {
@@ -793,9 +861,10 @@ func (a *App) evaluate(ctx context.Context) {
 	}
 	if modeChanged {
 		a.appendEvent(store.Event{
-			Time:    now,
-			Type:    "mode",
-			Message: fmt.Sprintf("Mode=%s, Array=%s", result.Mode, operation),
+			Time:     now,
+			Type:     "mode",
+			Message:  fmt.Sprintf("Mode=%s, Array=%s", result.Mode, operation),
+			Severity: severityForMode(result.Mode),
 		})
 	}
 }

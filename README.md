@@ -26,8 +26,12 @@ responsive web dashboard for monitoring and manual control.
 
 **Control logic**
 
-- Editable profiles (Silent, Balanced, Performance) with per-profile fan
-  curves, array-boost, emergency, and hysteresis settings
+- Editable profiles (Silent, Balanced, Performance, Target Temp) with
+  per-profile fan curves, array-boost, emergency, and hysteresis settings
+- Target Temp profile: instead of following a fixed curve, step the fan
+  speed up/down each cycle to keep the HDDs at or below a chosen
+  temperature (e.g. 40 °C), still bounded by the active profile's
+  emergency/array-boost/failsafe protections
 - Automatic boost during parity check, rebuild, resync and clear
 - Emergency protection via a configurable temperature threshold
 - Safety speed whenever the HDD temperature cannot be read
@@ -47,10 +51,12 @@ responsive web dashboard for monitoring and manual control.
 - Responsive web dashboard (desktop, tablet and phone) with live status,
   history charts (hover for exact values), and per-HDD temperature tiles
 - A single mode switch (Automatic / Manual / Emergency) plus manual test
-  buttons
-- Event log with a filter, a selectable page size (10 or 25 per page), and a
-  confirmation-gated clear action
+  buttons; switch profiles (including Target Temp) from the profile table
+- Event log with a filter for info/warning/critical severity, a selectable
+  page size (10 or 25 per page), and a confirmation-gated clear action
 - Light/dark theme toggle (defaults to dark)
+- Browser tab title shows the live fan percent and temperature
+  (e.g. "68% · 37°C – ZimaCube"), so it stays informative when backgrounded
 
 **Security & API**
 

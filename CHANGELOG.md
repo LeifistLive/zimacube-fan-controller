@@ -1,5 +1,43 @@
 # Changelog
 
+## 4.13.0
+
+### Added
+
+- New **Target Temp** profile alongside Silent/Balanced/Performance:
+  instead of following a fixed curve, the control loop steps the fan speed
+  up while the hottest HDD is above the profile's `target_temperature`
+  (built-in default 40 °C), down once comfortably below it, and holds
+  steady in between. It starts from the profile's safety floor rather than
+  0%, still falls back to the failsafe speed if the temperature becomes
+  unreadable, and is still overridden by the emergency threshold and
+  array-boost like a curve-based profile. Selected like any other profile,
+  from the profile table's Activate button; Automatic/Manual/Emergency stay
+  the only mode-switch options.
+
+### Changed
+
+- The "I²C Controller" info card is fully reworked for narrow phone
+  screens: the redundant version badge (already shown in the page header)
+  is hidden, the Bus/Address/Uptime/Array details stack one per line
+  instead of wrapping mid-list with a dangling divider, and the online/
+  offline indicator gets its own separated row instead of landing wherever
+  the wrap happened to place it.
+
+## 4.12.0
+
+### Added
+
+- Browser tab title now shows live values (e.g. `68% · 37°C – ZimaCube`),
+  visible even when the dashboard sits in a background tab.
+- Every event now carries a `severity` (`info`/`warning`/`critical`),
+  derived from what actually happened (emergency mode is critical,
+  failsafe/array-boost/failed logins/sensor & config problems are warnings,
+  everything else routine). The Events page marks warning/critical rows
+  with a colored left border and gained a "Warnings & critical" filter, so
+  the log distinguishes what needs attention from routine mode changes
+  instead of relying on type/color alone.
+
 ## 4.11.0
 
 ### Changed

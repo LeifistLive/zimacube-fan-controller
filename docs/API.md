@@ -27,6 +27,11 @@ successes as `login` (`"login succeeded from <ip>"`), failures as
 `login-failed` (`"failed login attempt for \"<user>\" from <ip>"`). The
 dashboard's Events page can filter to just these via its category dropdown.
 
+Every event also carries a `severity`: `info` (routine), `warning`
+(sensor/config problems, failed logins, array-boost/failsafe), or `critical`
+(emergency mode). The dashboard's category dropdown includes a "Warnings &
+critical" filter for exactly these two.
+
 ## Read
 
 - `GET /api/status`
@@ -59,11 +64,21 @@ immediately records one new event noting that the log was cleared — so the
 list is never left looking broken right after a successful clear, and there
 is a small audit trail of when it happened.
 
+A profile with a non-zero `target_temperature` (see the built-in "Target
+Temp" profile) replaces its curve as the "automatic" behavior: each cycle
+steps the fan speed up while the highest HDD temperature is above the
+target, down once it is comfortably below it, and holds steady in between.
+It still starts from the profile's safety floor rather than from zero, still
+falls back to the failsafe speed if the temperature becomes unreadable, and
+is still overridden by the emergency threshold and array-boost exactly like
+a curve-based profile. Activate it like any other profile, via
+`POST /api/profile/{name}`.
+
 ## Status Fields
 
 | Field | Meaning |
 | --- | --- |
-| `mode` | `automatic`, `manual`, `emergency`, `array-boost`, `failsafe` |
+| `mode` | `automatic`, `manual`, `target-temp`, `emergency`, `array-boost`, `failsafe` |
 | `target_percent` | Percentage requested by the control logic (can change even if the write fails) |
 | `last_applied_percent` | Value last actually written successfully via `i2cset` |
 | `fan_percent` | Deprecated alias for `target_percent`, kept for compatibility |
@@ -86,9 +101,10 @@ individual checks `status` (`"healthy"`/`"unhealthy"`), `controller`,
 
 `POST /api/config` expects the complete configuration. Profiles are
 validated: curve points must be between 1 and 100 percent, must not contain
-duplicate temperatures, and must not fall as temperature rises. Unknown JSON
-fields and data after the JSON object are rejected. Rejected configurations
-change nothing.
+duplicate temperatures, and must not fall as temperature rises. A profile's
+optional `target_temperature` (0 means "unused") must be between 20 and 100
+if set. Unknown JSON fields and data after the JSON object are rejected.
+Rejected configurations change nothing.
 
 `config_version` identifies the configuration format (currently `1`). If the
 field is missing (a configuration from before this change), version 1 is

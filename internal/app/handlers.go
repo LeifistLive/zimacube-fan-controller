@@ -185,9 +185,10 @@ func (a *App) handleClearEvents(w http.ResponseWriter, _ *http.Request) {
 		return
 	}
 	a.appendEvent(store.Event{
-		Time:    time.Now(),
-		Type:    "log",
-		Message: "event log cleared",
+		Time:     time.Now(),
+		Type:     "log",
+		Message:  "event log cleared",
+		Severity: SeverityInfo,
 	})
 	writeJSON(w, http.StatusOK, map[string]string{"status": "cleared"})
 }
@@ -356,9 +357,10 @@ func (a *App) handleFanTest(w http.ResponseWriter, r *http.Request) {
 	a.mu.Unlock()
 
 	a.appendEvent(store.Event{
-		Time:    time.Now(),
-		Type:    "fan-test",
-		Message: fmt.Sprintf("Test: %d%%", percent),
+		Time:     time.Now(),
+		Type:     "fan-test",
+		Message:  fmt.Sprintf("Test: %d%%", percent),
+		Severity: SeverityInfo,
 	})
 	a.trigger()
 	writeJSON(w, http.StatusOK, map[string]any{"tested_percent": percent})

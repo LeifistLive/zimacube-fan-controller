@@ -149,6 +149,75 @@ func TestDecideClampsResult(t *testing.T) {
 	}
 }
 
+func TestDecideTargetTempStepsUpWhenHot(t *testing.T) {
+	profile := testProfile(t)
+	profile.TargetTemperature = 40
+	result := decide(profile, valid(45, unraid.OperationNone), Override{}, 50)
+	if result.Percent != 50+targetTempStepUp || result.Mode != ModeTargetTemp {
+		t.Fatalf("target-temp profile does not step up while above target: %+v", result)
+	}
+}
+
+func TestDecideTargetTempStepsDownWhenCool(t *testing.T) {
+	profile := testProfile(t)
+	profile.TargetTemperature = 40
+	// 36 is at or below target(40) - band(2) = 38, so it should step down.
+	result := decide(profile, valid(36, unraid.OperationNone), Override{}, 50)
+	if result.Percent != 50-targetTempStepDown || result.Mode != ModeTargetTemp {
+		t.Fatalf("target-temp profile does not step down once comfortably under target: %+v", result)
+	}
+}
+
+func TestDecideTargetTempHoldsWithinBand(t *testing.T) {
+	profile := testProfile(t)
+	profile.TargetTemperature = 40
+	// 39 is under the target(40) but not yet under target-band(38): hold steady.
+	result := decide(profile, valid(39, unraid.OperationNone), Override{}, 50)
+	if result.Percent != 50 || result.Mode != ModeTargetTemp {
+		t.Fatalf("target-temp profile should hold steady inside the band: %+v", result)
+	}
+}
+
+func TestDecideTargetTempStartsFromFailsafeWithNoPriorFan(t *testing.T) {
+	profile := testProfile(t)
+	profile.TargetTemperature = 40
+	result := decide(profile, valid(45, unraid.OperationNone), Override{}, 0)
+	want := profile.ArrayBoostPercent + targetTempStepUp
+	if result.Percent != want {
+		t.Fatalf("target-temp profile should start from the failsafe speed, not 0: got %d, want %d", result.Percent, want)
+	}
+}
+
+// Regression: an unreadable disks.ini must fall back to the safety speed
+// on a target-temp profile too, not step from/toward an unknown temperature.
+func TestDecideTargetTempFailsafeOnUnknownTemperature(t *testing.T) {
+	profile := testProfile(t)
+	profile.TargetTemperature = 40
+	unknown := sample{Temperature: 0, Valid: false, Operation: unraid.OperationNone}
+	result := decide(profile, unknown, Override{}, 50)
+	if result.Percent != profile.ArrayBoostPercent || result.Mode != ModeFailsafe {
+		t.Fatalf("target-temp profile does not fail safe on unknown temperature: %+v", result)
+	}
+}
+
+func TestDecideTargetTempEmergencyOverride(t *testing.T) {
+	profile := testProfile(t)
+	profile.TargetTemperature = 40
+	result := decide(profile, valid(55, unraid.OperationNone), Override{}, 50)
+	if result.Percent != profile.EmergencyPercent || result.Mode != ModeEmergency {
+		t.Fatalf("emergency protection does not override target-temp profile: %+v", result)
+	}
+}
+
+func TestDecideManualOverrideStillWorksOnTargetTempProfile(t *testing.T) {
+	profile := testProfile(t)
+	profile.TargetTemperature = 40
+	result := decide(profile, valid(45, unraid.OperationNone), Override{Mode: ModeManual, Percent: 70}, 50)
+	if result.Percent != 70 || result.Mode != ModeManual {
+		t.Fatalf("manual override does not take effect on a target-temp profile: %+v", result)
+	}
+}
+
 func TestArrayActive(t *testing.T) {
 	if arrayActive(unraid.OperationNone) || arrayActive(unraid.OperationUnknown) || arrayActive("") {
 		t.Error("none, unknown, and empty must not be active")
