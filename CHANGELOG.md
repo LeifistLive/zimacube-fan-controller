@@ -14,6 +14,12 @@
   array-boost like a curve-based profile. Selected like any other profile,
   from the profile table's Activate button; Automatic/Manual/Emergency stay
   the only mode-switch options.
+- Target Temp profiles gained `target_minimum_percent` (default 30%): the
+  floor the step-down logic will not cross. Without it, a long stretch
+  comfortably under the target walked the fan all the way down to the
+  global 1% minimum, leaving negligible airflow until the next rise needed
+  several +8%/cycle steps to catch back up. Configs saved before this field
+  existed fall back to the same 30% default automatically.
 
 ### Fixed
 

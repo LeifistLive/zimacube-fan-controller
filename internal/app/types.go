@@ -76,6 +76,14 @@ type Profile struct {
 	// profile, so clearing this field later falls back to it rather than
 	// leaving the profile without any curve at all.
 	TargetTemperature int `json:"target_temperature,omitempty"`
+	// TargetMinimumPercent floors the fan speed while a target-temperature
+	// profile is stepping down: without it, a long stretch comfortably below
+	// TargetTemperature walks the fan all the way down to the global 1%
+	// minimum, leaving negligible airflow until the next rise needs several
+	// step-up cycles to catch up. Zero (including profiles saved before this
+	// field existed) falls back to defaultTargetMinimumPercent, see
+	// targetMinimumPercent().
+	TargetMinimumPercent int `json:"target_minimum_percent,omitempty"`
 }
 
 type RuntimeConfig struct {

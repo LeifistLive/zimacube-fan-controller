@@ -30,8 +30,9 @@ responsive web dashboard for monitoring and manual control.
   per-profile fan curves, array-boost, emergency, and hysteresis settings
 - Target Temp profile: instead of following a fixed curve, step the fan
   speed up/down each cycle to keep the HDDs at or below a chosen
-  temperature (e.g. 40 °C), still bounded by the active profile's
-  emergency/array-boost/failsafe protections
+  temperature (e.g. 40 °C), never below a configurable minimum (default
+  30%), still bounded by the active profile's emergency/array-boost/
+  failsafe protections
 - Automatic boost during parity check, rebuild, resync and clear
 - Emergency protection via a configurable temperature threshold
 - Safety speed whenever the HDD temperature cannot be read

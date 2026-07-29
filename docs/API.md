@@ -68,11 +68,13 @@ A profile with a non-zero `target_temperature` (see the built-in "Target
 Temp" profile) replaces its curve as the "automatic" behavior: each cycle
 steps the fan speed up while the highest HDD temperature is above the
 target, down once it is comfortably below it, and holds steady in between.
-It still starts from the profile's safety floor rather than from zero, still
-falls back to the failsafe speed if the temperature becomes unreadable, and
-is still overridden by the emergency threshold and array-boost exactly like
-a curve-based profile. Activate it like any other profile, via
-`POST /api/profile/{name}`.
+The step down never crosses `target_minimum_percent` (default 30 if unset),
+so a long stretch under the target does not walk the fan down to the global
+1% minimum. It still starts from the profile's safety floor rather than
+from zero, still falls back to the failsafe speed if the temperature
+becomes unreadable, and is still overridden by the emergency threshold and
+array-boost exactly like a curve-based profile. Activate it like any other
+profile, via `POST /api/profile/{name}`.
 
 ## Status Fields
 
@@ -103,8 +105,9 @@ individual checks `status` (`"healthy"`/`"unhealthy"`), `controller`,
 validated: curve points must be between 1 and 100 percent, must not contain
 duplicate temperatures, and must not fall as temperature rises. A profile's
 optional `target_temperature` (0 means "unused") must be between 20 and 100
-if set. Unknown JSON fields and data after the JSON object are rejected.
-Rejected configurations change nothing.
+if set; its optional `target_minimum_percent` (0 means "use the 30% default")
+must be between 1 and 100 if set. Unknown JSON fields and data after the
+JSON object are rejected. Rejected configurations change nothing.
 
 `config_version` identifies the configuration format (currently `2`). If the
 field is missing, version 0 is assumed; a version higher than this binary

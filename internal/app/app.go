@@ -305,6 +305,7 @@ func defaultRuntimeConfig() RuntimeConfig {
 				EmergencyPercent:     100,
 				HysteresisC:          2,
 				TargetTemperature:    40,
+				TargetMinimumPercent: defaultTargetMinimumPercent,
 			},
 		},
 	}
@@ -363,6 +364,11 @@ func normalizeRuntimeConfig(in RuntimeConfig) (RuntimeConfig, error) {
 		if profile.TargetTemperature != 0 && (profile.TargetTemperature < 20 || profile.TargetTemperature > 100) {
 			return RuntimeConfig{}, fmt.Errorf("profile %q: target_temperature %d is not between 20 and 100",
 				name, profile.TargetTemperature)
+		}
+		if profile.TargetMinimumPercent != 0 &&
+			(profile.TargetMinimumPercent < controller.MinPercent || profile.TargetMinimumPercent > controller.MaxPercent) {
+			return RuntimeConfig{}, fmt.Errorf("profile %q: target_minimum_percent %d is not between %d and %d",
+				name, profile.TargetMinimumPercent, controller.MinPercent, controller.MaxPercent)
 		}
 		if strings.TrimSpace(profile.Name) == "" {
 			profile.Name = name
@@ -537,8 +543,12 @@ func decide(profile Profile, reading sample, override Override, lastFan int) dec
 			if start <= 0 {
 				start = failsafe
 			}
+			percent := targetTemperatureStep(reading.Temperature, profile.TargetTemperature, start)
+			if floor := targetMinimumPercent(profile); percent < floor {
+				percent = floor
+			}
 			result = decision{
-				Percent: targetTemperatureStep(reading.Temperature, profile.TargetTemperature, start),
+				Percent: percent,
 				Mode:    ModeTargetTemp,
 				Reason: fmt.Sprintf("keeping HDDs at or below %d °C (currently %d °C)",
 					profile.TargetTemperature, reading.Temperature),
@@ -626,6 +636,11 @@ const (
 	targetTempBandC    = 2
 )
 
+// defaultTargetMinimumPercent is the fallback floor for a target-temperature
+// profile that leaves TargetMinimumPercent unset (0), including profiles
+// saved before that field existed - see targetMinimumPercent.
+const defaultTargetMinimumPercent = 30
+
 // targetTemperatureStep is the pure feedback step for ModeTargetTemp: nudge
 // the previous speed up while above target, down once comfortably under it,
 // and hold steady in between. decide() clamps the result to
@@ -639,6 +654,18 @@ func targetTemperatureStep(currentTemp, target, lastPercent int) int {
 	default:
 		return lastPercent
 	}
+}
+
+// targetMinimumPercent is the floor decide() will not step below while
+// stepping down: a long stretch comfortably under the target would otherwise
+// walk the fan all the way to the global 1% minimum. Zero means "unset" -
+// including a profile saved before this field existed - and falls back to
+// defaultTargetMinimumPercent instead of no floor at all.
+func targetMinimumPercent(profile Profile) int {
+	if profile.TargetMinimumPercent > 0 {
+		return profile.TargetMinimumPercent
+	}
+	return defaultTargetMinimumPercent
 }
 
 // fanTestFloor mirrors decide()'s safety minimums: a manual fan test must

@@ -218,6 +218,29 @@ func TestDecideManualOverrideStillWorksOnTargetTempProfile(t *testing.T) {
 	}
 }
 
+// Regression: without a floor, a long stretch comfortably under the target
+// walks the fan all the way down to the global 1% minimum.
+func TestDecideTargetTempDoesNotStepBelowDefaultFloor(t *testing.T) {
+	profile := testProfile(t)
+	profile.TargetTemperature = 40
+	// 30 is well under target(40) - band(2): step down. 32-4=28 would fall
+	// below defaultTargetMinimumPercent(30) without the floor.
+	result := decide(profile, valid(30, unraid.OperationNone), Override{}, 32)
+	if result.Percent != defaultTargetMinimumPercent || result.Mode != ModeTargetTemp {
+		t.Fatalf("target-temp profile stepped below the default floor: %+v", result)
+	}
+}
+
+func TestDecideTargetTempRespectsCustomFloor(t *testing.T) {
+	profile := testProfile(t)
+	profile.TargetTemperature = 40
+	profile.TargetMinimumPercent = 50
+	result := decide(profile, valid(30, unraid.OperationNone), Override{}, 52)
+	if result.Percent != 50 || result.Mode != ModeTargetTemp {
+		t.Fatalf("target-temp profile stepped below its custom floor: %+v", result)
+	}
+}
+
 func TestArrayActive(t *testing.T) {
 	if arrayActive(unraid.OperationNone) || arrayActive(unraid.OperationUnknown) || arrayActive("") {
 		t.Error("none, unknown, and empty must not be active")

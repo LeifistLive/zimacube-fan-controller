@@ -246,6 +246,26 @@ func TestNormalizeDoesNotReintroduceTargetTempAtVersion2(t *testing.T) {
 	}
 }
 
+func TestNormalizeRejectsOutOfRangeTargetMinimumPercent(t *testing.T) {
+	input := RuntimeConfig{
+		ConfigVersion: currentConfigVersion,
+		ActiveProfile: "p",
+		Profiles: map[string]Profile{
+			"p": {
+				Curve:                mustCurve(t, "0:60,48:100"),
+				ArrayBoostPercent:    100,
+				EmergencyTemperature: 52,
+				EmergencyPercent:     100,
+				TargetTemperature:    40,
+				TargetMinimumPercent: 101,
+			},
+		},
+	}
+	if _, err := normalizeRuntimeConfig(input); err == nil {
+		t.Fatal("target_minimum_percent above 100 must be rejected")
+	}
+}
+
 func TestNormalizeRejectsFutureConfigVersion(t *testing.T) {
 	input := RuntimeConfig{
 		ConfigVersion: currentConfigVersion + 1,
