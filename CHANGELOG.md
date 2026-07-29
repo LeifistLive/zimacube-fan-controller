@@ -1,5 +1,29 @@
 # Changelog
 
+## 4.13.1
+
+### Fixed
+
+- A profile's safety percentages were only validated individually, not in
+  relation to each other, so e.g. `emergency_percent` lower than
+  `array_boost_percent` or `target_minimum_percent` was accepted - reaching
+  the emergency temperature (or the target-temp floor) could then actually
+  slow the fans down instead of speeding them up. `emergency_percent` must
+  now be at least `array_boost_percent`, and for Target Temp profiles also
+  at least `target_minimum_percent`; `array_boost_percent` must be at least
+  `target_minimum_percent` too. `POST /api/config` rejects a violation
+  outright, same as any other invalid value. Loading `config.json` at
+  startup is more lenient: instead of discarding every custom profile over
+  one inconsistent percentage, the offending value is raised just enough to
+  satisfy the ordering, logged as a warning and a `config` event, and the
+  corrected file is written back. The built-in profiles were already
+  consistent (their safety values are all 100%), so this only affects
+  hand-edited configs.
+- `docker-compose.yml` pinned the image to `:latest` instead of a specific
+  version, so a redeploy (or GHCR being temporarily behind) could pull a
+  different build than what was tested, without the compose file itself
+  changing. Now pinned to `:v4.13.1`; bump it deliberately on upgrade.
+
 ## 4.13.0
 
 ### Added

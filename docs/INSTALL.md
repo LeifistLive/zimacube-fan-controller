@@ -6,8 +6,10 @@
    or paste [docker-compose.yml](../docker-compose.yml) directly).
 4. Set the variables from `.env.example` as stack environment variables,
    at minimum `ADMIN_PASSWORD` (protects the whole dashboard via login).
-5. Enable **Re-pull image**, so redeploying always picks up the latest image
-   published to GHCR.
+5. Enable **Re-pull image**, so redeploying re-fetches the pinned version
+   tag if it changed. `docker-compose.yml` deliberately pins a specific
+   version instead of `:latest`, so an upgrade means bumping the tag in
+   that file, not just re-pulling.
 6. Deploy the stack and open `http://<unraid-ip>:8086/`.
 
 ## Building Locally Instead

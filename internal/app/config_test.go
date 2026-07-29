@@ -128,7 +128,7 @@ func TestLoadRuntimeConfigDoesNotMergeDefaults(t *testing.T) {
 		t.Fatalf("SaveJSON: %v", err)
 	}
 
-	loaded, err := loadRuntimeConfig(st)
+	loaded, _, err := loadRuntimeConfig(st)
 	if err != nil {
 		t.Fatalf("loadRuntimeConfig: %v", err)
 	}
@@ -151,6 +151,45 @@ func TestLoadRuntimeConfigDoesNotMergeDefaults(t *testing.T) {
 	}
 }
 
+// Regression: an existing config.json with an inconsistent safety-percentage
+// ordering (see TestNormalizeRejectsEmergencyBelowArrayBoost) must be
+// repaired and loaded, not discarded wholesale in favor of hardcoded
+// defaults - unlike POST /api/config, which still rejects the same
+// inconsistency outright.
+func TestLoadRuntimeConfigRepairsSafetyOrdering(t *testing.T) {
+	st := store.New(t.TempDir(), 0)
+	if err := st.Ensure(); err != nil {
+		t.Fatalf("Ensure: %v", err)
+	}
+
+	saved := RuntimeConfig{
+		ConfigVersion: currentConfigVersion,
+		ActiveProfile: "p",
+		Profiles: map[string]Profile{
+			"p": {
+				Curve:                mustCurve(t, "0:50,50:100"),
+				ArrayBoostPercent:    80,
+				EmergencyTemperature: 55,
+				EmergencyPercent:     50,
+			},
+		},
+	}
+	if err := st.SaveJSON("config.json", saved); err != nil {
+		t.Fatalf("SaveJSON: %v", err)
+	}
+
+	loaded, notes, err := loadRuntimeConfig(st)
+	if err != nil {
+		t.Fatalf("loadRuntimeConfig: %v", err)
+	}
+	if len(notes) == 0 {
+		t.Fatal("expected a repair note for the inconsistent emergency_percent")
+	}
+	if got := loaded.Profiles["p"].EmergencyPercent; got != 80 {
+		t.Fatalf("emergency_percent = %d, expected it raised to array_boost_percent (80)", got)
+	}
+}
+
 func TestLoadRuntimeConfigRejectsBrokenFile(t *testing.T) {
 	st := store.New(t.TempDir(), 0)
 	if err := st.Ensure(); err != nil {
@@ -166,7 +205,7 @@ func TestLoadRuntimeConfigRejectsBrokenFile(t *testing.T) {
 	if err := st.SaveJSON("config.json", broken); err != nil {
 		t.Fatalf("SaveJSON: %v", err)
 	}
-	if _, err := loadRuntimeConfig(st); err == nil {
+	if _, _, err := loadRuntimeConfig(st); err == nil {
 		t.Fatal("a profile without a curve must be rejected")
 	}
 }
@@ -263,6 +302,95 @@ func TestNormalizeRejectsOutOfRangeTargetMinimumPercent(t *testing.T) {
 	}
 	if _, err := normalizeRuntimeConfig(input); err == nil {
 		t.Fatal("target_minimum_percent above 100 must be rejected")
+	}
+}
+
+// Regression: safety percentages were only range-checked individually, so
+// emergency_percent lower than array_boost_percent was accepted - reaching
+// the emergency temperature during an array operation would then actually
+// slow the fans down instead of speeding them up.
+func TestNormalizeRejectsEmergencyBelowArrayBoost(t *testing.T) {
+	input := RuntimeConfig{
+		ConfigVersion: currentConfigVersion,
+		ActiveProfile: "p",
+		Profiles: map[string]Profile{
+			"p": {
+				Curve:                mustCurve(t, "0:60,48:100"),
+				ArrayBoostPercent:    80,
+				EmergencyTemperature: 52,
+				EmergencyPercent:     50,
+			},
+		},
+	}
+	if _, err := normalizeRuntimeConfig(input); err == nil {
+		t.Fatal("emergency_percent lower than array_boost_percent must be rejected")
+	}
+}
+
+// Regression: same issue as above, but against the Target Temp floor -
+// reaching the emergency temperature on a target-temp profile could
+// otherwise end up slower than the floor that is supposed to apply even in
+// normal operation.
+func TestNormalizeRejectsEmergencyBelowTargetMinimum(t *testing.T) {
+	input := RuntimeConfig{
+		ConfigVersion: currentConfigVersion,
+		ActiveProfile: "p",
+		Profiles: map[string]Profile{
+			"p": {
+				Curve:                mustCurve(t, "0:60,48:100"),
+				ArrayBoostPercent:    100,
+				EmergencyTemperature: 52,
+				EmergencyPercent:     20,
+				TargetTemperature:    40,
+				TargetMinimumPercent: 30,
+			},
+		},
+	}
+	if _, err := normalizeRuntimeConfig(input); err == nil {
+		t.Fatal("emergency_percent lower than target_minimum_percent must be rejected")
+	}
+}
+
+// Regression: array_boost_percent lower than target_minimum_percent is
+// accepted range-wise but contradicts the floor's purpose (a "minimum" that
+// array-boost could undercut).
+func TestNormalizeRejectsArrayBoostBelowTargetMinimum(t *testing.T) {
+	input := RuntimeConfig{
+		ConfigVersion: currentConfigVersion,
+		ActiveProfile: "p",
+		Profiles: map[string]Profile{
+			"p": {
+				Curve:                mustCurve(t, "0:60,48:100"),
+				ArrayBoostPercent:    20,
+				EmergencyTemperature: 52,
+				EmergencyPercent:     100,
+				TargetTemperature:    40,
+				TargetMinimumPercent: 30,
+			},
+		},
+	}
+	if _, err := normalizeRuntimeConfig(input); err == nil {
+		t.Fatal("array_boost_percent lower than target_minimum_percent must be rejected")
+	}
+}
+
+// A curve-based (non-target-temp) profile must not be held to the
+// target_minimum_percent ordering, since that floor never applies to it.
+func TestNormalizeAllowsLowArrayBoostWithoutTargetTemperature(t *testing.T) {
+	input := RuntimeConfig{
+		ConfigVersion: currentConfigVersion,
+		ActiveProfile: "p",
+		Profiles: map[string]Profile{
+			"p": {
+				Curve:                mustCurve(t, "0:60,48:100"),
+				ArrayBoostPercent:    20,
+				EmergencyTemperature: 52,
+				EmergencyPercent:     100,
+			},
+		},
+	}
+	if _, err := normalizeRuntimeConfig(input); err != nil {
+		t.Fatalf("unexpected error for a profile without target_temperature: %v", err)
 	}
 }
 

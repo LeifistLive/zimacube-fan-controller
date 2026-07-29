@@ -106,8 +106,20 @@ validated: curve points must be between 1 and 100 percent, must not contain
 duplicate temperatures, and must not fall as temperature rises. A profile's
 optional `target_temperature` (0 means "unused") must be between 20 and 100
 if set; its optional `target_minimum_percent` (0 means "use the 30% default")
-must be between 1 and 100 if set. Unknown JSON fields and data after the
-JSON object are rejected. Rejected configurations change nothing.
+must be between 1 and 100 if set. `emergency_percent` must be at least
+`array_boost_percent` (and, for a Target Temp profile, at least
+`target_minimum_percent` too), and `array_boost_percent` must itself be at
+least `target_minimum_percent` - otherwise the emergency response could end
+up slower than a calmer state, which defeats the point of it. Unknown JSON
+fields and data after the JSON object are rejected. Rejected configurations
+change nothing.
+
+This ordering check is strict for `POST /api/config` - a violation is
+rejected outright, so a mistake is visible immediately. Loading
+`config.json` at startup is more lenient: rather than discarding every
+profile over one inconsistent percentage, the low value is raised just
+enough to satisfy the ordering, logged (server log plus a `config` event),
+and written back to `config.json`.
 
 `config_version` identifies the configuration format (currently `2`). If the
 field is missing, version 0 is assumed; a version higher than this binary

@@ -1,12 +1,17 @@
 services:
   zimacube-fan-controller:
-    # Pulls the prebuilt multi-arch image CI publishes on every push to main
-    # and on version tags (see .github/workflows/ghcr.yml), instead of
-    # building from source - faster deploys, and Portainer's "Re-pull image"
-    # actually does something. To build locally instead (e.g. after changing
-    # the code), replace this with a `build: context: .` block - see
+    # Pulls the prebuilt multi-arch image CI publishes on version tags (see
+    # .github/workflows/ghcr.yml), instead of building from source - faster
+    # deploys, and Portainer's "Re-pull image" actually does something.
+    # Pinned to a specific version instead of :latest: :latest also moves on
+    # every push to main, so Portainer could silently pull in an unreleased
+    # (or, if GHCR is temporarily behind, an older) build without this file
+    # changing at all. Bump this tag deliberately when you upgrade, and
+    # confirm the running version afterwards (dashboard header or
+    # GET /api/health). To build locally instead (e.g. after changing the
+    # code), replace this with a `build: context: .` block - see
     # docs/INSTALL.md.
-    image: ghcr.io/leifistlive/zimacube-fan-controller:latest
+    image: ghcr.io/leifistlive/zimacube-fan-controller:v4.13.1
     container_name: zimacube-fan-controller
     restart: unless-stopped
 

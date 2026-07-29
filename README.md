@@ -101,12 +101,15 @@ modprobe i2c-i801
 ```
 
 **2. Deploy.** [docker-compose.yml](docker-compose.yml) pulls the prebuilt
-image `ghcr.io/leifistlive/zimacube-fan-controller:latest` (published for
-linux/amd64 and linux/arm64 on every push to `main` and on version tags) —
-deploy it as a Portainer stack (Git repository or pasted compose) and enable
-**Re-pull image** so redeploying picks up new releases. See
-[docs/INSTALL.md](docs/INSTALL.md) for the full walkthrough, including how
-to build from source locally instead if you've changed the code.
+image `ghcr.io/leifistlive/zimacube-fan-controller:v4.13.1` (published for
+linux/amd64 and linux/arm64 on version tags, see
+[.github/workflows/ghcr.yml](.github/workflows/ghcr.yml)) — deploy it as a
+Portainer stack (Git repository or pasted compose). Pinned to a version
+instead of `:latest` so a redeploy never silently changes what's running;
+bump the tag deliberately when you want to upgrade, then enable **Re-pull
+image**. See [docs/INSTALL.md](docs/INSTALL.md) for the full walkthrough,
+including how to build from source locally instead if you've changed the
+code.
 
 Either way, set the variables from [.env.example](.env.example) as stack
 environment variables, at minimum `ADMIN_PASSWORD`.

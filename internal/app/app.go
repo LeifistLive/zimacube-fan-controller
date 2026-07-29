@@ -221,10 +221,25 @@ func New(cfg Config) (*App, error) {
 	}
 	app.auth = auth
 
-	loaded, err := loadRuntimeConfig(st)
+	loaded, repairNotes, err := loadRuntimeConfig(st)
 	switch {
 	case err == nil:
 		app.runtime = loaded
+		for _, note := range repairNotes {
+			log.Printf("[WARN] %s: %s", configFile, note)
+			_ = st.AppendEvent(store.Event{
+				Time:     time.Now(),
+				Type:     "config",
+				Message:  note,
+				Severity: SeverityWarning,
+			})
+		}
+		if len(repairNotes) > 0 {
+			if err := st.SaveJSON(configFile, loaded); err != nil {
+				log.Printf("[WARN] could not persist repaired %s: %v", configFile, err)
+				app.setStorageOK(storageConfig, false)
+			}
+		}
 	case errors.Is(err, os.ErrNotExist):
 		log.Printf("[INFO] No %s found, using default profiles", configFile)
 	default:
@@ -249,12 +264,54 @@ func New(cfg Config) (*App, error) {
 // loadRuntimeConfig deliberately decodes into an empty struct. The previous
 // version decoded into the defaults, so a profile deleted through the API
 // reappeared on the next restart.
-func loadRuntimeConfig(st *store.Store) (RuntimeConfig, error) {
+//
+// Unlike POST /api/config (which rejects an inconsistent safety-percentage
+// ordering outright, see normalizeRuntimeConfig), a config.json with that
+// problem is repaired here instead of being discarded wholesale: an
+// operator actively editing the config through the API should see the
+// mistake immediately, but a config.json that has been running for months
+// should not suddenly lose every custom profile over one percentage found
+// at startup. The returned notes describe what was raised, for the caller
+// to log and persist.
+func loadRuntimeConfig(st *store.Store) (RuntimeConfig, []string, error) {
 	var loaded RuntimeConfig
 	if err := st.LoadJSON(configFile, &loaded); err != nil {
-		return RuntimeConfig{}, err
+		return RuntimeConfig{}, nil, err
 	}
-	return normalizeRuntimeConfig(loaded)
+	repaired, notes := repairSafetyOrdering(loaded)
+	out, err := normalizeRuntimeConfig(repaired)
+	if err != nil {
+		return RuntimeConfig{}, nil, err
+	}
+	return out, notes, nil
+}
+
+// repairSafetyOrdering raises a profile's array-boost/emergency percentages
+// just enough to satisfy the ordering normalizeRuntimeConfig enforces
+// (emergency >= array-boost >= target-minimum), instead of failing the
+// whole config over one inconsistent value in an existing config.json.
+// Values already out of their individual 1-100 range are left alone;
+// normalizeRuntimeConfig still rejects those exactly as before.
+func repairSafetyOrdering(cfg RuntimeConfig) (RuntimeConfig, []string) {
+	var notes []string
+	for name, profile := range cfg.Profiles {
+		if profile.TargetTemperature > 0 {
+			if minPercent := targetMinimumPercent(profile); profile.ArrayBoostPercent < minPercent {
+				notes = append(notes, fmt.Sprintf(
+					"profile %q: array_boost_percent %d raised to target_minimum_percent %d",
+					name, profile.ArrayBoostPercent, minPercent))
+				profile.ArrayBoostPercent = minPercent
+			}
+		}
+		if profile.EmergencyPercent < profile.ArrayBoostPercent {
+			notes = append(notes, fmt.Sprintf(
+				"profile %q: emergency_percent %d raised to array_boost_percent %d",
+				name, profile.EmergencyPercent, profile.ArrayBoostPercent))
+			profile.EmergencyPercent = profile.ArrayBoostPercent
+		}
+		cfg.Profiles[name] = profile
+	}
+	return cfg, notes
 }
 
 func defaultRuntimeConfig() RuntimeConfig {
@@ -369,6 +426,28 @@ func normalizeRuntimeConfig(in RuntimeConfig) (RuntimeConfig, error) {
 			(profile.TargetMinimumPercent < controller.MinPercent || profile.TargetMinimumPercent > controller.MaxPercent) {
 			return RuntimeConfig{}, fmt.Errorf("profile %q: target_minimum_percent %d is not between %d and %d",
 				name, profile.TargetMinimumPercent, controller.MinPercent, controller.MaxPercent)
+		}
+		// Emergency is the most urgent response decide() can pick; if it were
+		// lower than the calmer floors below, reaching the emergency
+		// temperature while one of them is active would slow the fans down
+		// instead of speeding them up.
+		if profile.EmergencyPercent < profile.ArrayBoostPercent {
+			return RuntimeConfig{}, fmt.Errorf(
+				"profile %q: emergency_percent (%d) must not be lower than array_boost_percent (%d)",
+				name, profile.EmergencyPercent, profile.ArrayBoostPercent)
+		}
+		if profile.TargetTemperature > 0 {
+			floor := targetMinimumPercent(profile)
+			if profile.EmergencyPercent < floor {
+				return RuntimeConfig{}, fmt.Errorf(
+					"profile %q: emergency_percent (%d) must not be lower than target_minimum_percent (%d)",
+					name, profile.EmergencyPercent, floor)
+			}
+			if profile.ArrayBoostPercent < floor {
+				return RuntimeConfig{}, fmt.Errorf(
+					"profile %q: array_boost_percent (%d) must not be lower than target_minimum_percent (%d)",
+					name, profile.ArrayBoostPercent, floor)
+			}
 		}
 		if strings.TrimSpace(profile.Name) == "" {
 			profile.Name = name
